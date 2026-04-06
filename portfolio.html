@@ -16,7 +16,6 @@
     --bg: #000000;
     --bg2: #010101;
     --border: rgba(0,255,65,0.2);
-    --scanline: rgba(0,255,65,0.04);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,24 +30,6 @@
     cursor: text;
   }
 
-  /* CRT Scanline effect */
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      var(--scanline) 2px,
-      var(--scanline) 4px
-    );
-    pointer-events: none;
-    z-index: 9999;
-  }
-
-  body.no-crt::before { display: none; }
 
   /* Vignette */
   body::after {
@@ -506,12 +487,6 @@
 
   #hint-bar span { color: var(--green-dim); }
 
-  #crt-toggle {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  #crt-toggle:hover { color: var(--green); }
   #hint-bar kbd {
     color: var(--cyan);
     border: 1px solid #333;
@@ -1061,8 +1036,7 @@
   <span><kbd>↑↓</kbd> history</span>
   <span><kbd>TAB</kbd> autocomplete</span>
   <span>type <kbd>help</kbd> for commands</span>
-  <span id="crt-toggle" onclick="toggleCRT()"><kbd>CRT</kbd> <span id="crt-state">ON</span></span>
-  <span style="margin-left:auto; color:#333">SEC-PORT-01 // AUTHORIZED TERMINAL</span>
+<span style="margin-left:auto; color:#333">SEC-PORT-01 // AUTHORIZED TERMINAL</span>
 </div>
 
 <div id="resume-modal" onclick="if(event.target===this)closeResumePreview()">
@@ -1554,7 +1528,6 @@ const COMMANDS = {
   'status': cmdStatus,
   'exit': cmdExit,
   'download-resume': cmdDownloadResume,
-  'toggle-crt': cmdToggleCRT,
   'project': cmdProject,
   'snake': cmdSnake,
   'pointsail-lab': cmdPointsailLab,
@@ -3300,7 +3273,7 @@ function dispatch(raw) {
 }
 
 // Tab autocomplete
-const ALL_CMDS = ['demo', 'demo-skip', 'whoami', 'skills', 'show-projects', 'project', 'view-certifications', 'contact', 'download-resume', 'pointsail-lab', 'su', 'su-exit', 'id', 'policy-check', 'audit', 'scan', 'history', 'help', 'clear', 'status', 'ls', 'cat', 'snake', 'exit', 'sudo', 'toggle-crt'];
+const ALL_CMDS = ['demo', 'demo-skip', 'whoami', 'skills', 'show-projects', 'project', 'view-certifications', 'contact', 'download-resume', 'pointsail-lab', 'su', 'su-exit', 'id', 'policy-check', 'audit', 'scan', 'history', 'help', 'clear', 'status', 'ls', 'cat', 'snake', 'exit', 'sudo'];
 
 document.getElementById('cmd-input').addEventListener('keydown', (e) => {
   const input = document.getElementById('cmd-input');
@@ -3525,29 +3498,6 @@ function cmdSnake() {
   openSnakeGame();
 }
 
-// CRT toggle
-function toggleCRT() {
-  const off = document.body.classList.toggle('no-crt');
-  document.getElementById('crt-state').textContent = off ? 'OFF' : 'ON';
-  localStorage.setItem('crt', off ? 'off' : 'on');
-}
-
-function cmdToggleCRT() {
-  toggleCRT();
-  const isOff = document.body.classList.contains('no-crt');
-  addOutput(`
-    <div class="output-block">
-      <div class="cmd-echo">toggle-crt</div>
-      <div style="color:var(--green-dim); font-size:12px;">CRT scanline effect: <span style="color:${isOff ? 'var(--amber)' : 'var(--green)'};">${isOff ? 'OFF' : 'ON'}</span></div>
-    </div>
-  `);
-}
-
-// Restore CRT preference
-if (localStorage.getItem('crt') === 'off') {
-  document.body.classList.add('no-crt');
-  document.getElementById('crt-state').textContent = 'OFF';
-}
 
 // Keep focus (skip when snake game is open)
 document.addEventListener('click', () => {
