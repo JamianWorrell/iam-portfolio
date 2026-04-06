@@ -1,0 +1,3619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACCESS REQUEST TERMINAL // SEC-PORT-01</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00ff41;
+    --green-dim: #00b800;
+    --green-dark: #002200;
+    --amber: #ffaa00;
+    --red: #ff3355;
+    --cyan: #00ff41;
+    --bg: #000000;
+    --bg2: #010101;
+    --border: rgba(0,255,65,0.2);
+    --scanline: rgba(0,255,65,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: text;
+  }
+
+  /* CRT Scanline effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scanline) 2px,
+      var(--scanline) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  body.no-crt::before { display: none; }
+
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(ellipse at center, transparent 60%, #000 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  #terminal {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  /* BOOT SCREEN */
+  #boot {
+    padding: 40px 0;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .ascii-logo {
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green);
+    margin-bottom: 20px;
+    white-space: pre;
+  }
+
+  .boot-line {
+    color: var(--green-dim);
+    margin: 4px 0;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .boot-line.ok { color: var(--green); }
+  .boot-line.warn { color: var(--amber); }
+  .boot-line.err { color: var(--red); }
+
+  .boot-title {
+    font-family: 'Orbitron', monospace;
+    color: var(--green);
+    font-size: 13px;
+    text-shadow: 0 0 10px var(--green);
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+
+  .boot-meta {
+    color: #4a4a4a;
+    font-size: 12px;
+    margin: 1px 0;
+  }
+
+  .boot-spin { color: var(--green-dim); }
+
+  .separator {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* MAIN PROMPT */
+  #main-ui { display: none; }
+
+  .section-header {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  #output {
+    min-height: 200px;
+    margin-bottom: 20px;
+  }
+
+  .output-block {
+    margin: 12px 0;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .cmd-echo {
+    color: var(--cyan);
+    margin-bottom: 8px;
+  }
+
+  .cmd-echo::before { content: '> '; color: var(--green); }
+
+  /* Input line */
+  #input-row {
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    padding-bottom: 20px;
+  }
+
+  .prompt-symbol {
+    color: var(--green);
+    text-shadow: 0 0 10px var(--green);
+    margin-right: 8px;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  #cmd-input {
+    background: transparent;
+    border: none;
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    flex: 1;
+    outline: none;
+    caret-color: var(--green);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  /* Blinking cursor */
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* Help table */
+  .help-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .help-table td {
+    padding: 4px 12px 4px 0;
+    vertical-align: top;
+  }
+
+  .help-table .cmd-name {
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+
+  .help-table .cmd-desc {
+    color: var(--green-dim);
+  }
+
+  .help-table .cmd-name:hover {
+    text-shadow: 0 0 8px var(--cyan);
+    text-decoration: underline;
+  }
+
+  /* Info boxes */
+  .info-box {
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin: 8px 0;
+    background: rgba(0,255,136,0.02);
+    position: relative;
+  }
+
+  .info-box::before {
+    content: attr(data-label);
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    background: var(--bg);
+    padding: 0 6px;
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--cyan);
+  }
+
+  .tag {
+    display: inline-block;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    padding: 2px 8px;
+    margin: 3px;
+    font-size: 11px;
+    border-radius: 2px;
+  }
+
+  .tag.amber {
+    background: rgba(255,170,0,0.1);
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  .tag.cyan {
+    background: rgba(0,221,255,0.1);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* Project cards */
+  .project-card {
+    border: 1px solid var(--border);
+    padding: 14px;
+    margin: 10px 0;
+    background: rgba(0,255,136,0.015);
+    transition: border-color 0.2s;
+  }
+
+  .project-card:hover {
+    border-color: var(--green-dim);
+    background: rgba(0,255,136,0.04);
+  }
+
+  .project-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+    margin-bottom: 6px;
+  }
+
+  .project-desc {
+    color: var(--green-dim);
+    margin-bottom: 8px;
+    line-height: 1.6;
+  }
+
+  /* Status indicators */
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .status-dot.wip { background: var(--amber); }
+  .status-dot.archived { background: #555; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* MFA screen */
+  .mfa-prompt {
+    border: 1px solid var(--amber);
+    padding: 20px;
+    margin: 12px 0;
+    background: rgba(255,170,0,0.03);
+    text-align: center;
+  }
+
+  .mfa-title {
+    font-family: 'Orbitron', monospace;
+    color: var(--amber);
+    font-size: 14px;
+    margin-bottom: 12px;
+    letter-spacing: 3px;
+  }
+
+  .mfa-digits {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 16px 0;
+  }
+
+  .mfa-digit {
+    width: 40px;
+    height: 50px;
+    border: 2px solid var(--amber);
+    background: rgba(255,170,0,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    color: var(--amber);
+    text-shadow: 0 0 10px var(--amber);
+    animation: digitFlip 0.3s ease;
+  }
+
+  @keyframes digitFlip {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+
+  /* Certification badge */
+  .cert-badge {
+    border: 1px solid var(--cyan);
+    padding: 12px 16px;
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(0,221,255,0.02);
+  }
+
+  .cert-icon {
+    font-size: 24px;
+    width: 40px;
+    text-align: center;
+  }
+
+  .cert-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    margin-bottom: 4px;
+  }
+
+  .cert-meta {
+    color: var(--green-dim);
+    font-size: 12px;
+  }
+
+  /* Denied */
+  .access-denied {
+    border: 1px solid var(--red);
+    padding: 16px;
+    background: rgba(255,51,85,0.05);
+    animation: shake 0.4s ease;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  .denied-text {
+    color: var(--red);
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    background: var(--green-dark);
+    height: 4px;
+    margin: 4px 0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    transition: width 1s ease;
+    border-radius: 2px;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    color: var(--green-dim);
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+
+  /* Typewriter */
+  .typewriter {
+    overflow: hidden;
+    white-space: nowrap;
+    animation: typewrite 0.8s steps(40, end) forwards;
+  }
+
+  @keyframes typewrite {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  /* Contact info */
+  .contact-row {
+    display: flex;
+    gap: 8px;
+    margin: 6px 0;
+    align-items: center;
+    color: var(--green-dim);
+  }
+
+  .contact-label {
+    color: var(--cyan);
+    min-width: 100px;
+  }
+
+  .contact-val a {
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .contact-val a:hover {
+    text-shadow: 0 0 8px var(--green);
+    text-decoration: underline;
+  }
+
+  /* Log stream */
+  .log-line {
+    font-size: 12px;
+    color: var(--green-dim);
+    margin: 2px 0;
+  }
+
+  .log-line .ts { color: #4a4a4a; margin-right: 8px; }
+  .log-line .level-info { color: var(--cyan); }
+  .log-line .level-warn { color: var(--amber); }
+  .log-line .level-ok { color: var(--green); }
+
+  /* Hint bar */
+  #hint-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(3,15,10,0.95);
+    border-top: 1px solid var(--border);
+    padding: 8px 20px;
+    font-size: 11px;
+    color: #4a4a4a;
+    display: flex;
+    gap: 24px;
+    z-index: 100;
+  }
+
+  #hint-bar span { color: var(--green-dim); }
+
+  #crt-toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  #crt-toggle:hover { color: var(--green); }
+  #hint-bar kbd {
+    color: var(--cyan);
+    border: 1px solid #333;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+  }
+
+  /* Glitch effect */
+  .glitch {
+    position: relative;
+  }
+  .glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .glitch::before {
+    color: var(--red);
+    animation: glitch1 3s infinite;
+    clip-path: polygon(0 30%, 100% 30%, 100% 50%, 0 50%);
+  }
+  .glitch::after {
+    color: var(--cyan);
+    animation: glitch2 3s infinite;
+    clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
+  }
+  @keyframes glitch1 {
+    0%, 90%, 100% { transform: translate(0); }
+    92% { transform: translate(-3px, 1px); }
+    96% { transform: translate(3px, -1px); }
+  }
+  @keyframes glitch2 {
+    0%, 90%, 100% { transform: translate(0); }
+    93% { transform: translate(3px, 1px); }
+    97% { transform: translate(-3px, -1px); }
+  }
+
+  /* Auth badge */
+  .auth-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--green);
+    padding: 3px 10px;
+    font-size: 11px;
+    background: rgba(0,255,136,0.08);
+  }
+
+  .auth-badge.unauth {
+    border-color: var(--red);
+    background: rgba(255,51,85,0.05);
+    color: var(--red);
+  }
+  .auth-badge.su-session {
+    border-color: var(--cyan);
+    background: rgba(6,182,212,0.08);
+    color: var(--cyan);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--green-dark); }
+
+  /* Resume Preview Modal */
+  #resume-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.88);
+    z-index: 20000;
+    align-items: center;
+    justify-content: center;
+  }
+  #resume-modal.active { display: flex; }
+
+  .resume-modal-box {
+    width: 85%;
+    max-width: 960px;
+    height: 88vh;
+    border: 1px solid var(--green);
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 60px rgba(0,255,65,0.12);
+  }
+
+  .resume-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,255,65,0.04);
+    flex-shrink: 0;
+  }
+
+  .resume-modal-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 1px;
+  }
+
+  .resume-modal-meta {
+    color: #555;
+    font-size: 11px;
+    margin-left: 16px;
+  }
+
+  .resume-modal-iframe {
+    flex: 1;
+    border: none;
+    min-height: 0;
+  }
+
+  .resume-modal-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,255,65,0.03);
+    flex-shrink: 0;
+  }
+
+  .resume-btn {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 6px 18px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .resume-btn:hover { background: rgba(0,255,65,0.08); text-shadow: 0 0 8px var(--green); }
+
+  .resume-btn-close {
+    background: transparent;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 6px 18px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .resume-btn-close:hover { background: rgba(255,170,0,0.08); text-shadow: 0 0 8px var(--amber); }
+
+  /* ─── SNAKE GAME ───────────────────────────────────────────── */
+  #snake-modal {
+    display: none; position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%; background: rgba(0,0,0,0.92);
+    z-index: 20000; align-items: center; justify-content: center;
+  }
+  #snake-modal.active { display: flex; }
+  .snake-modal-box {
+    border: 1px solid var(--green); background: #000;
+    display: flex; flex-direction: column;
+    box-shadow: 0 0 60px rgba(0,255,65,0.15);
+  }
+  .snake-hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: rgba(0,255,65,0.04);
+  }
+  .snake-ftr {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 16px; border-top: 1px solid var(--border);
+    background: rgba(0,255,65,0.03); font-size: 11px; color: #555;
+  }
+  .snake-ftr kbd {
+    background: rgba(0,255,65,0.08); border: 1px solid var(--border);
+    padding: 1px 5px; font-family: 'Share Tech Mono', monospace;
+    color: var(--green-dim);
+  }
+  #snake-canvas { display: block; background: #000; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Demo Split View ─────────────────────────────── */
+  #demo-split-wrap {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9990;
+    background: #000;
+  }
+
+  #demo-split-wrap.active { display: flex; }
+
+  #demo-split-terminal {
+    width: 50%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-right: 1px solid rgba(0,255,65,0.15);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* When #output is reparented into the split panel it needs padding */
+  #demo-split-terminal #output {
+    flex: 1;
+    padding: 16px 20px 16px;
+    min-height: 0;
+  }
+
+  /* input row at the bottom of split panel */
+  #demo-split-terminal #input-row {
+    position: sticky;
+    bottom: 0;
+    background: #000;
+    border-top: 1px solid rgba(0,255,65,0.12);
+    padding: 10px 20px;
+    flex-shrink: 0;
+  }
+
+  #demo-split-lab {
+    width: 50%;
+    height: 100%;
+    position: relative;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #demo-split-lab-header {
+    height: 28px;
+    background: #001845;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  #demo-split-lab-header span {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  #demo-split-lab-header .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
+    animation: pulse-dot 1.5s ease infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  #demo-split-iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+    display: block;
+  }
+
+  /* original terminal wrapper is hidden in split mode — content moves to split panel */
+  body.demo-split #terminal { display: none; }
+  body.demo-split #hint-bar { display: none; }
+
+  body.demo-split #demo-skip-bar { width: 50%; }
+
+  @media (max-width: 900px) {
+    #demo-split-terminal { width: 100%; }
+    #demo-split-lab { display: none; }
+  }
+
+  /* ── Mobile / small screen ──────────────────────────────── */
+  @media (max-width: 640px) {
+    #terminal {
+      padding: 12px;
+      font-size: 13px;
+    }
+    .ascii-logo {
+      font-size: 6px;
+      line-height: 1.15;
+    }
+    #header {
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 12px;
+    }
+    #header-title { font-size: 10px; }
+    #input-row { padding: 8px 12px; gap: 6px; }
+    #cmd-input { font-size: 13px; }
+    .info-box { padding: 12px; }
+    .info-box::before { font-size: 8px; padding: 1px 6px; top: -8px; }
+    /* whoami metrics — 2 col on mobile */
+    .whoami-metrics { grid-template-columns: repeat(2,1fr) !important; }
+    /* domains — 1 col on mobile */
+    .whoami-domains { grid-template-columns: 1fr !important; }
+    /* project arch — hidden on small screens */
+    .project-arch { display: none !important; }
+    .cmd-name { min-width: 110px; }
+    .help-table { font-size: 11px; }
+    .wc-box { padding: 24px 18px 20px; }
+    .wc-cmds { grid-template-columns: 1fr !important; }
+  }
+
+  /* ── Welcome Overlay ─────────────────────────────────────── */
+  #welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(2px);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .wc-box {
+    border: 1px solid var(--green);
+    box-shadow: 0 0 32px rgba(0,255,65,0.18), inset 0 0 60px rgba(0,255,65,0.03);
+    background: #000;
+    max-width: 620px;
+    width: 92%;
+    padding: 36px 40px 30px;
+    position: relative;
+  }
+
+  .wc-corner {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-color: var(--green);
+    border-style: solid;
+  }
+  .wc-corner.tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .wc-corner.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+  .wc-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+  .wc-corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  .wc-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--green-dim);
+    margin-bottom: 18px;
+    text-transform: uppercase;
+  }
+
+  .wc-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .wc-title {
+    font-size: 13px;
+    color: var(--amber);
+    letter-spacing: 1px;
+    margin-bottom: 22px;
+  }
+
+  .wc-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 0 20px;
+  }
+
+  .wc-body {
+    font-size: 13px;
+    color: #88cc88;
+    line-height: 1.7;
+    margin-bottom: 22px;
+  }
+
+  .wc-body b { color: var(--green); }
+
+  .wc-cmds {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 26px;
+  }
+
+  .wc-cmd-card {
+    border: 1px solid rgba(0,255,65,0.3);
+    padding: 8px 14px;
+    background: rgba(0,255,65,0.04);
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .wc-cmd-card .cmd-name {
+    color: var(--green);
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 3px;
+  }
+
+  .wc-cmd-card .cmd-desc {
+    font-size: 11px;
+    color: var(--green-dim);
+    line-height: 1.5;
+  }
+
+  .wc-footer {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .wc-dismiss-btn {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 7px 20px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .wc-dismiss-btn:hover {
+    background: var(--green);
+    color: #000;
+  }
+
+  .wc-countdown-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .wc-countdown-label {
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 1px;
+  }
+
+  .wc-bar-track {
+    height: 3px;
+    background: rgba(0,255,65,0.12);
+    position: relative;
+    overflow: hidden;
+  }
+
+  #wc-bar {
+    height: 100%;
+    background: var(--green);
+    width: 0%;
+    transition: width 0.9s linear;
+    box-shadow: 0 0 6px var(--green);
+  }
+</style>
+</head>
+<body>
+
+  <!-- WELCOME OVERLAY (first visit per session) -->
+  <div id="welcome-overlay" onclick="dismissWelcome()">
+    <div class="wc-box" onclick="event.stopPropagation()">
+      <div class="wc-corner tl"></div>
+      <div class="wc-corner tr"></div>
+      <div class="wc-corner bl"></div>
+      <div class="wc-corner br"></div>
+
+      <div class="wc-label">// IAM Portfolio — Visitor Orientation</div>
+
+      <div class="wc-name">JAMIAN WORRELL</div>
+      <div class="wc-title">IAM / Cloud Security Engineer</div>
+
+      <hr class="wc-divider">
+
+      <div class="wc-body">
+        Welcome. This is an <b>interactive terminal portfolio</b> built to demonstrate
+        hands-on Identity and Access Management skills. Everything here is functional —
+        not just a slide deck.<br><br>
+        Alongside this terminal runs a <b>live PointSail IAM simulator</b> where you can
+        watch real governance workflows: provisioning, access reviews, policy enforcement,
+        and real-time revocation — all wired together.
+      </div>
+
+      <div class="wc-cmds">
+        <div class="wc-cmd-card">
+          <div class="cmd-name">&gt; demo</div>
+          <div class="cmd-desc">60-second automated walkthrough — opens the simulator and runs a full IAM scenario</div>
+        </div>
+        <div class="wc-cmd-card">
+          <div class="cmd-name">&gt; help</div>
+          <div class="cmd-desc">Full command reference — skills, projects, certifications, and more</div>
+        </div>
+        <div class="wc-cmd-card">
+          <div class="cmd-name">&gt; whoami</div>
+          <div class="cmd-desc">Background, experience, and what I bring to an IAM team</div>
+        </div>
+      </div>
+
+      <div class="wc-footer">
+        <button class="wc-dismiss-btn" onclick="dismissWelcome()">Enter Terminal</button>
+        <div class="wc-countdown-wrap">
+          <div class="wc-countdown-label">Auto-continuing in <span id="wc-countdown">18</span>s</div>
+          <div class="wc-bar-track"><div id="wc-bar"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<div id="terminal">
+  <!-- BOOT SEQUENCE -->
+  <div id="boot">
+    <div class="ascii-logo" id="ascii-art"></div>
+    <div id="boot-lines"></div>
+  </div>
+
+  <!-- MAIN UI -->
+  <div id="main-ui">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+      <div>
+        <div class="section-header">SECURE PORTFOLIO TERMINAL</div>
+        <div style="color:#4a4a4a; font-size:12px;">SESSION: <span style="color:var(--green-dim)" id="session-id"></span></div>
+      </div>
+      <div id="auth-status" class="auth-badge unauth">◉ UNAUTHENTICATED</div>
+    </div>
+
+    <div id="output"></div>
+
+    <div id="input-row">
+      <span class="prompt-symbol" id="prompt-text">SEC-PORT-01 ~</span>
+      <span style="color:var(--green); margin: 0 6px;">$</span>
+      <input type="text" id="cmd-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" autofocus>
+    </div>
+  </div>
+</div>
+
+<div id="hint-bar">
+  <span><kbd>↑↓</kbd> history</span>
+  <span><kbd>TAB</kbd> autocomplete</span>
+  <span>type <kbd>help</kbd> for commands</span>
+  <span id="crt-toggle" onclick="toggleCRT()"><kbd>CRT</kbd> <span id="crt-state">ON</span></span>
+  <span style="margin-left:auto; color:#333">SEC-PORT-01 // AUTHORIZED TERMINAL</span>
+</div>
+
+<div id="resume-modal" onclick="if(event.target===this)closeResumePreview()">
+  <div class="resume-modal-box">
+    <div class="resume-modal-header">
+      <div style="display:flex; align-items:center;">
+        <div class="resume-modal-title">FILE PREVIEW // resume.pdf</div>
+        <div class="resume-modal-meta">[ DECRYPTED · AUTHENTICATED SESSION ]</div>
+      </div>
+      <button class="resume-btn-close" onclick="closeResumePreview()">✕ ESC</button>
+    </div>
+    <iframe class="resume-modal-iframe" src="resume.pdf" title="Resume Preview"></iframe>
+    <div class="resume-modal-footer">
+      <button class="resume-btn" onclick="downloadResumeFromModal()">▶ DOWNLOAD</button>
+      <button class="resume-btn-close" onclick="closeResumePreview()">✕ DISMISS</button>
+      <span style="margin-left:auto; color:#555; font-size:11px;">⚠ Released under authenticated session — transfer will be logged</span>
+    </div>
+  </div>
+</div>
+
+<div id="snake-modal" onclick="if(event.target===this)closeSnakeGame()">
+  <div class="snake-modal-box">
+    <div class="snake-hdr">
+      <div style="font-family:'Orbitron',monospace; font-size:11px; color:var(--green); letter-spacing:1px;">SNAKE // TERMINAL ARCADE</div>
+      <div style="display:flex; align-items:center; gap:20px;">
+        <span style="font-size:12px; color:var(--green-dim);">SCORE: <span id="snake-score">0</span></span>
+        <span style="font-size:12px; color:#555;">BEST: <span id="snake-hi">0</span></span>
+        <button class="resume-btn-close" onclick="closeSnakeGame()">✕ ESC</button>
+      </div>
+    </div>
+    <canvas id="snake-canvas" width="480" height="384"></canvas>
+    <div class="snake-ftr">
+      <span><kbd>↑ ↓ ← →</kbd> move</span>
+      <span><kbd>P</kbd> pause</span>
+      <span><kbd>R</kbd> restart</span>
+      <span><kbd>ESC</kbd> exit</span>
+      <span style="margin-left:auto; color:#333;">// EASTER EGG UNLOCKED</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const ASCII_LOGO = `
+  ███████╗███████╗ ██████╗    ██████╗  ██████╗ ██████╗ ████████╗
+  ██╔════╝██╔════╝██╔════╝    ██╔══██╗██╔═══██╗██╔══██╗╚══██╔══╝
+  ███████╗█████╗  ██║         ██████╔╝██║   ██║██████╔╝   ██║   
+  ╚════██║██╔══╝  ██║         ██╔═══╝ ██║   ██║██╔══██╗   ██║   
+  ███████║███████╗╚██████╗    ██║     ╚██████╔╝██║  ██║   ██║   
+  ╚══════╝╚══════╝ ╚═════╝    ╚═╝      ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+`;
+
+const BOOT_ITEMS = [
+  { init: '|', load: '[INIT] Runtime initialized............................',  resolve: '[OK]  [INIT] Runtime initialized......................... OK',                                              status: 'ok'   },
+  { init: '/', load: '[NET]  TLS channel established........................',   resolve: '[OK]  [NET]  TLS channel established..................... OK',                                              status: 'ok'   },
+  { init: '-', load: '[IDP]  Loading OIDC configuration.....................',   resolve: '[OK]  [IDP]  Loading OIDC configuration.................. OK',                                              status: 'ok'   },
+  { init: '\\',load: '[IDP]  Fetching signing keys (JWKS)...................',   resolve: '[OK]  [IDP]  Fetching signing keys (JWKS)................ OK',                                              status: 'ok'   },
+  { init: '|', load: '[POL]  Conditional Access policies....................',   resolve: '[WARN][POL]  Conditional Access policies................. cache warm-up 312ms',                            status: 'warn' },
+  { init: '/', load: '[POL]  RBAC roles.....................................',    resolve: '[OK]  [POL]  RBAC roles.................................. OK',                                              status: 'ok'   },
+  { init: '-', load: '[GOV]  Identity lifecycle workflows...................',    resolve: '[OK]  [GOV]  Identity lifecycle workflows................ READY',                                           status: 'ok'   },
+  { init: '\\',load: '[AUD]  Audit logging pipeline.........................',    resolve: '[OK]  [AUD]  Audit logging pipeline...................... CONNECTED (siem-ready) corr=9c2e-41d1-a0f3',   status: 'ok'   },
+];
+
+let isAuthenticated = false;
+let cmdHistory = [];
+let historyIndex = -1;
+let suSession     = null; // {id, name, email, dept, title, mgr, risk, score, access, violations, accessLevel}
+let _suTTLTimer   = null; // fires at 13 min — 2-min warning
+let _suExpireTimer = null; // fires at 15 min — hard expiry
+const SU_TTL_MS   = 15 * 60 * 1000; // 15 minutes
+const SU_WARN_MS  = 13 * 60 * 1000; // warn at 13 minutes
+
+// Data
+const DATA = {
+  whoami: {
+    name: 'Jamian Worrell',
+    title: 'IAM Engineer & Cloud Security Specialist',
+    clearance: 'PUBLIC',
+    location: 'United Kingdom',
+    experience: '5+ years',
+    status: 'OPEN TO OPPORTUNITIES',
+    bio: 'Identity and Access Management engineer with 5+ years designing and operating enterprise IAM programmes. Core focus: identity governance, privileged access management, and zero-trust architecture across hybrid cloud environments. I build the systems that decide who gets access to what — and make sure those decisions are enforced, audited, and revocable in real time.',
+    domains: [
+      { label: 'Identity Governance & Admin', detail: 'SailPoint IIQ · PointSail · SCIM 2.0 · IGA lifecycle' },
+      { label: 'Privileged Access Management', detail: 'CyberArk · PAM vault design · JIT access · credential brokering' },
+      { label: 'Directory & Federation', detail: 'Active Directory · Azure AD · Okta · SAML 2.0 · OIDC · LDAP' },
+      { label: 'Zero Trust Architecture', detail: 'Policy enforcement · least-privilege · RBAC / ABAC / PBAC' },
+      { label: 'Cloud IAM', detail: 'AWS IAM · Azure RBAC · GCP IAM · IaC policy scanning' },
+      { label: 'Compliance & Audit', detail: 'SOX · SOC 2 · NIST 800-53 · SoD controls · access certifications' },
+    ],
+    metrics: [
+      { val: '50k+', label: 'identities under governance' },
+      { val: '94%',  label: 'reduction in unauthorized access' },
+      { val: '73%',  label: 'orphan accounts eliminated' },
+      { val: '12k+', label: 'lifecycle events automated/yr' },
+    ],
+    skills: {
+      'IAM Platforms': ['SailPoint IIQ', 'Okta', 'Azure AD', 'CyberArk', 'PointSail'],
+      'Protocols & Standards': ['SCIM 2.0', 'SAML 2.0', 'OIDC', 'OAuth 2.0', 'LDAP', 'Kerberos'],
+      'Cloud': ['AWS IAM', 'Azure RBAC', 'GCP IAM', 'Terraform', 'Kubernetes'],
+      'Engineering': ['Python', 'Go', 'TypeScript', 'OPA / Rego', 'REST APIs'],
+      'Governance': ['Zero Trust', 'PAM', 'SoD policy design', 'Access Certifications', 'RBAC/ABAC'],
+    }
+  },
+  projects: [
+    {
+      id: 'PROJ-001',
+      category: 'IAM',
+      name: 'PointSail IGA Platform',
+      desc: 'Designed and built a fully functional Identity Governance & Administration simulator modelling enterprise-grade IGA workflows: identity lifecycle, entitlement management, SoD policy enforcement, access certification campaigns, and real-time provisioning. Ships with a live terminal integration that demonstrates cross-system session management and zero-latency access revocation.',
+      stack: ['SailPoint IIQ concepts', 'JavaScript', 'LocalStorage IPC', 'SCIM/LDAP patterns', 'OPA-style policy engine'],
+      status: 'active',
+      year: 2025,
+      impact: 'Full working IGA system — live in this portfolio. Try it: pointsail-lab',
+      github: 'https://github.com/JamianWorrell',
+      lab: { scenario: null, label: 'Open Full Simulator' },
+      highlights: [
+        '20+ managed identities across joiner/mover/leaver lifecycle states with real risk scoring',
+        'Policy engine evaluates Finance-IT and HR-Finance SoD rules across all identities continuously',
+        'Cross-system session bus: portfolio terminal federates with IGA via localStorage event channel',
+        'Real-time revocation: entitlement removed in IGA → active terminal session terminated in <100ms',
+        'Access certification engine with campaign management, certifier assignment, and audit trail',
+        '10 source connectors (AD, Workday, Salesforce, Azure AD, Okta) with aggregation simulation',
+      ],
+      arch: `  ┌─────────────────────────────────────────────────────┐
+  │              POINTSAIL IGA PLATFORM                 │
+  │                                                     │
+  │  [Identity Warehouse]    [Policy Engine]            │
+  │   20+ identities          SoD rules                 │
+  │   Joiner/Mover/Leaver     Violation detection       │
+  │   Risk scoring            Remediation workflow      │
+  │         │                       │                   │
+  │         └──────────┬────────────┘                   │
+  │                    ▼                                 │
+  │           [Governance Layer]                         │
+  │            Certifications                            │
+  │            Access Requests                           │
+  │            Provisioning Plans                        │
+  │                    │                                 │
+  │                    ▼                                 │
+  │        [localStorage Event Bus]                      │
+  └────────────────────┼────────────────────────────────┘
+                       │  real-time IPC
+                       ▼
+         ┌─────────────────────────┐
+         │   IAM PORTFOLIO TERMINAL│
+         │   su <identity>         │
+         │   policy-check          │
+         │   session TTL + eject   │
+         └─────────────────────────┘`,
+    },
+    {
+      id: 'PROJ-002',
+      category: 'IAM',
+      name: 'SoD Policy Engine & Remediation Workflow',
+      desc: 'Designed a Separation of Duties policy engine modelling real enterprise conflict detection — Finance-IT and HR-Finance SoD rules evaluated across 20+ identities. Built the full 7-step remediation workflow: violation detection → auto-notification → analyst review → option selection → approval routing → provisioning execution → verified closure.',
+      stack: ['Policy Rule Design', 'SailPoint SoD patterns', 'RBAC/ABAC', 'Workflow Automation', 'Audit Logging'],
+      status: 'active',
+      year: 2025,
+      impact: '4 active SoD violators detected across the identity population — all with remediation paths',
+      github: 'https://github.com/JamianWorrell',
+      lab: { scenario: 'S4', label: 'Run SoD Remediation Lab (S4)' },
+      highlights: [
+        'Finance-IT SoD: conflicts between CN=Finance_Users and CN=IT_Admins detected across 4 identities',
+        'Privileged Access Limit: flags identities holding more than 5 privileged entitlements',
+        '3-option remediation tree: revoke left, revoke right, revoke both — each with risk rating',
+        'Approval routing gate: selected remediation must pass manager sign-off before execution',
+        'Policy re-evaluation post-closure confirms violation no longer present before marking Verified',
+        'Audit event written at every stage — full non-repudiation chain from detection to closure',
+      ],
+      arch: `  [Identity Warehouse] ──► [SoD Rule Evaluator]
+                                      │
+              ┌───────────────────────┤
+              │  Finance-IT SoD rule  │
+              │  HR-Finance SoD rule  │
+              │  Priv Access Limit    │
+              └───────────────────────┘
+                          │ violation detected
+                          ▼
+              [Auto-Notification Engine]
+               email → identity, manager, security
+                          │
+                          ▼
+              [7-Step Remediation Workflow]
+               Detected → Notified → Review
+               → Option Selected → Approved
+               → Executed → Verified & Closed
+                          │
+                          ▼
+              [Audit Log] + [Risk Score Update]`,
+    },
+    {
+      id: 'PROJ-003',
+      category: 'IAM',
+      name: 'Identity Lifecycle & Access Certification',
+      desc: 'Implemented the full joiner/mover/leaver lifecycle engine and an access certification campaign system. Joiner events trigger provisioning plans from source systems (Workday, AD). Leaver events flag orphan accounts. Certification campaigns enforce periodic access review with risk-based decision support — certify or revoke per entitlement.',
+      stack: ['IGA Lifecycle', 'SCIM provisioning patterns', 'Access Review workflows', 'Least Privilege', 'SailPoint IIQ patterns'],
+      status: 'active',
+      year: 2025,
+      impact: 'Identified 2 orphan accounts (120d+ inactive) and 1 never-offboarded contractor in the identity population',
+      github: 'https://github.com/JamianWorrell',
+      lab: { scenario: 'S3', label: 'Run Certification Campaign Lab (S3)' },
+      highlights: [
+        'Joiner: new hire provisioned via Workday SCIM push — role-based entitlements auto-assigned',
+        'Mover: department/title change triggers entitlement delta — over-provisioned access flagged',
+        'Leaver: contract expiry detected — 2 contractor accounts with access 90-120 days post-termination',
+        'Certification campaigns: 10-item Q4 review with approve/revoke decisions per entitlement',
+        'Risk-based guidance: inactive accounts, orphan entitlements, and high-risk roles flagged for revoke',
+        'Campaign completion rate tracked — certifier accountability enforced before campaign closes',
+      ],
+      arch: `  [Workday / AD / Salesforce]
+          │  SCIM / aggregation
+          ▼
+  [Source Connectors] ──► [Identity Warehouse]
+                                  │
+             ┌────────────────────┤
+             │   Joiner event     │ auto-provision
+             │   Mover event      │ delta entitlements
+             │   Leaver event     │ flag orphans
+             └────────────────────┘
+                          │
+                          ▼
+          [Access Certification Engine]
+           Campaign creation
+           Per-entitlement: Certify / Revoke
+           Risk score + last login guidance
+           Audit trail per decision`,
+    },
+    {
+      id: 'PROJ-004',
+      category: 'IAM',
+      name: 'Privileged Access & High-Risk Identity Investigation',
+      desc: 'Built the high-risk identity detection and investigation system — risk scoring engine across 20+ identities, orphan account detection, privileged access limit enforcement, and the Identity Cube: a 360° governance record surfacing entitlements, violations, access history, and live session state per identity.',
+      stack: ['PAM concepts', 'CyberArk patterns', 'Risk Scoring', 'Orphan Account Detection', 'Identity Analytics'],
+      status: 'active',
+      year: 2025,
+      impact: 'Risk scores 0–100 across full identity population — 6 identities flagged High risk',
+      github: 'https://github.com/JamianWorrell',
+      lab: { scenario: 'S1', label: 'Run High-Risk Investigation Lab (S1)' },
+      highlights: [
+        'Risk scoring: composite score from violations, inactive days, orphan status, privileged entitlement count',
+        'Orphan detection: accounts with no manager in authoritative source flagged automatically',
+        'Privileged Access Limit: >5 privileged entitlements triggers PAM violation (james.white: 8)',
+        'Identity Cube: 360° record — profile, all entitlements, active violations, full change history',
+        'Live session indicator: TERMINAL LIVE badge when identity has active portfolio terminal session',
+        'Investigation workflow: filter → search → inspect → trace violation to policy → remediate',
+      ],
+      arch: `  [All Identities]
+          │
+          ▼
+  [Risk Scoring Engine]
+   + days since login
+   + violation count × weight
+   + orphan status flag
+   + privileged ent count
+          │
+          ▼
+  [Risk Tiers: Low / Medium / High / Critical]
+          │
+          ▼
+  [Identity Cube — per identity]
+   ├─ Profile (dept, title, source)
+   ├─ Entitlements (all systems)
+   ├─ Violations (active SoD, PAM)
+   ├─ History (all lifecycle events)
+   └─ Live Session (terminal IPC)`,
+    },
+  ],
+  certs: [
+    { icon: '🖥️', name: 'CompTIA A+', org: 'CompTIA', year: 2021 },
+    { icon: '🌐', name: 'CompTIA Network+', org: 'CompTIA', year: 2021 },
+    { icon: '🔒', name: 'CompTIA Security+', org: 'CompTIA', year: 2022 },
+    { icon: '☁️', name: 'Microsoft Azure Fundamentals (AZ-900)', org: 'Microsoft', year: 2023 },
+    { icon: '🐧', name: 'LPI Linux Essentials', org: 'Linux Professional Institute', year: 2022 },
+  ],
+  contact: {
+    email: 'jamian.worrell@gmail.com',
+    github: 'https://github.com/JamianWorrell',
+    linkedin: 'www.linkedin.com/in/jamianworrell',
+    pgp: '4E3A 8B12 C091 D4F7',
+  }
+};
+
+// Generate session ID
+function genSession() {
+  return Array.from({length: 16}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+}
+
+// Boot sequence
+function boot() {
+  document.getElementById('ascii-art').style.display = 'none';
+  const container = document.getElementById('boot-lines');
+  const SPINNERS = ['|', '/', '-', '\\'];
+
+  // Header lines
+  const header = [
+    { text: 'IAM Access Request Terminal v1.0',               cls: 'boot-title' },
+    { text: 'env: production-sim   region: us-east   build: 7f3a9c2', cls: 'boot-meta' },
+    { text: 'corr: 9c2e-41d1-a0f3',                          cls: 'boot-meta' },
+    { text: '',                                               cls: 'boot-line'  },
+  ];
+
+  header.forEach((line, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.className = line.cls;
+      div.textContent = line.text;
+      container.appendChild(div);
+    }, i * 120);
+  });
+
+  const itemStart = header.length * 120 + 100;
+
+  // Loading items (staggered, with spinner)
+  BOOT_ITEMS.forEach((item, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.className = 'boot-line';
+      div.id = `boot-item-${i}`;
+      div.innerHTML = `<span class="boot-spin" data-idx="${i}">[${item.init}]</span> ${item.load}`;
+      container.appendChild(div);
+    }, itemStart + i * 190);
+  });
+
+  // Animate spinners while loading
+  let frame = 0;
+  const spinInterval = setInterval(() => {
+    frame++;
+    document.querySelectorAll('.boot-spin').forEach(el => {
+      const idx = parseInt(el.dataset.idx);
+      el.textContent = `[${SPINNERS[(frame + idx) % SPINNERS.length]}]`;
+    });
+  }, 110);
+
+  const resolveAt = itemStart + BOOT_ITEMS.length * 190 + 500;
+
+  // Resolve all items to final state
+  setTimeout(() => {
+    clearInterval(spinInterval);
+    BOOT_ITEMS.forEach((item, i) => {
+      const el = document.getElementById(`boot-item-${i}`);
+      if (!el) return;
+      el.className = `boot-line ${item.status}`;
+      el.textContent = item.resolve;
+    });
+
+    // System ready + suggestion
+    setTimeout(() => {
+      const ready = document.createElement('div');
+      ready.className = 'boot-line ok';
+      ready.textContent = '[OK]  System ready.';
+      container.appendChild(ready);
+
+      const suggest = document.createElement('div');
+      suggest.className = 'boot-line warn';
+      suggest.innerHTML = '⬡ MFA verification required — enter the one-time code to gain full access';
+      container.appendChild(suggest);
+
+      setTimeout(showMain, 2000);
+    }, 400);
+  }, resolveAt);
+}
+
+function showMain() {
+  document.getElementById('boot').style.display = 'none';
+  const main = document.getElementById('main-ui');
+  main.style.display = 'block';
+  document.getElementById('session-id').textContent = genSession();
+
+  // Show welcome overlay on first visit this session
+  if (!sessionStorage.getItem('ps_welcomed')) {
+    showWelcomeOverlay();
+  } else {
+    printWelcome();
+    document.getElementById('cmd-input').focus();
+  }
+}
+
+function showWelcomeOverlay() {
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) { printWelcome(); document.getElementById('cmd-input').focus(); return; }
+  overlay.style.opacity = '1';
+  overlay.style.transition = '';
+  overlay.style.display = 'flex';
+
+  // Auto-dismiss after 18 seconds
+  let countdown = 18;
+  const countEl = document.getElementById('wc-countdown');
+  const barEl   = document.getElementById('wc-bar');
+  if (countEl) countEl.textContent = countdown;
+
+  const tick = setInterval(() => {
+    countdown--;
+    if (countEl) countEl.textContent = countdown;
+    if (barEl)   barEl.style.width   = ((18 - countdown) / 18 * 100) + '%';
+    if (countdown <= 0) { clearInterval(tick); dismissWelcome(); }
+  }, 1000);
+
+  overlay._tick = tick;
+}
+
+function dismissWelcome() {
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return;
+  if (overlay._tick) clearInterval(overlay._tick);
+  overlay.style.opacity = '0';
+  overlay.style.transition = 'opacity 0.5s ease';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    sessionStorage.setItem('ps_welcomed', '1');
+    printWelcome();
+    document.getElementById('cmd-input').focus();
+  }, 500);
+}
+
+function printHelpPanel() {
+  addOutput(`
+    <div class="output-block">
+      <div class="info-box" data-label="AVAILABLE COMMANDS">
+        <div style="color:var(--green-dim); font-size:11px; margin-bottom:12px;">Click a command below or type it in the terminal and press Enter:</div>
+        <table class="help-table">
+          <tr><td colspan="2" style="padding:4px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:var(--cyan); border-bottom:1px solid rgba(6,182,212,0.3);">QUICK START</td></tr>
+          <tr><td class="cmd-name" style="color:var(--cyan);cursor:pointer" onclick="dispatch('demo')">demo</td><td class="cmd-desc" style="color:var(--cyan)">Auto-play 60s IAM governance demonstration — recommended for first-time visitors</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">PORTFOLIO</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('whoami')">whoami</td><td class="cmd-desc">Display identity and background of current user</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('skills')">skills</td><td class="cmd-desc">List technical skills and proficiency levels</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('show-projects')">show-projects</td><td class="cmd-desc">List all portfolio projects</td></tr>
+          <tr><td class="cmd-name" style="color:var(--amber);">project &lt;id&gt;</td><td class="cmd-desc">View architecture diagram and full details for a project</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('view-certifications')">view-certifications</td><td class="cmd-desc">Display security certifications</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('contact')">contact</td><td class="cmd-desc">Retrieve contact information [REQUIRES AUTH]</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('download-resume')">download-resume</td><td class="cmd-desc">Download resume [REQUIRES AUTH]</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">IAM LAB</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;color:var(--cyan);" onclick="runCmd('pointsail-lab')">pointsail-lab</td><td class="cmd-desc">Launch PointSail Identity Platform — live IAM environment simulation</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">SYSTEM</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('history')">history</td><td class="cmd-desc">List commands run this session — click any to replay</td></tr>
+          <tr><td class="cmd-name" style="cursor:pointer;" onclick="runCmd('clear')">clear</td><td class="cmd-desc">Clear terminal output</td></tr>
+        </table>
+      </div>
+    </div>
+  `);
+}
+
+function printWelcome() {
+  addOutput(`
+    <div class="output-block">
+      <div class="log-line"><span class="ts">00:00:00</span><span class="level-ok">[SYS]</span> Terminal session established</div>
+      <div class="log-line"><span class="ts">00:00:01</span><span class="level-warn">[SEC]</span> Unrecognized client detected — identity verification required</div>
+      <div class="log-line"><span class="ts">00:00:02</span><span class="level-info">[IAM]</span> Generating one-time passcode — type the code shown below to authenticate</div>
+    </div>
+  `);
+  cmdAuthenticate(['--mfa'], true);
+}
+
+function runCmd(cmd) {
+  const input = document.getElementById('cmd-input');
+  input.value = cmd;
+  dispatch(cmd);
+  input.value = '';
+  input.focus();
+}
+
+function addOutput(html) {
+  const out = document.getElementById('output');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  out.appendChild(div);
+  // In split mode the output lives inside the scrollable split panel
+  if (document.body.classList.contains('demo-split')) {
+    const panel = document.getElementById('demo-split-terminal');
+    if (panel) panel.scrollTop = panel.scrollHeight;
+  } else {
+    out.scrollTop = out.scrollHeight;
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+}
+
+// Command handlers
+const COMMANDS = {
+  help: cmdHelp,
+  whoami: cmdWhoami,
+  'show-projects': cmdProjects,
+  'authenticate': cmdAuthenticate,
+  'view-certifications': cmdCerts,
+  'contact': cmdContact,
+  'skills': cmdSkills,
+  'clear': cmdClear,
+  'sudo': cmdSudo,
+  'ls': cmdLs,
+  'cat': cmdCat,
+  'status': cmdStatus,
+  'exit': cmdExit,
+  'download-resume': cmdDownloadResume,
+  'toggle-crt': cmdToggleCRT,
+  'project': cmdProject,
+  'snake': cmdSnake,
+  'pointsail-lab': cmdPointsailLab,
+  'su': cmdSu,
+  'su-exit': cmdSuExit,
+  'id': cmdId,
+  'demo': cmdDemo,
+  'demo-skip': cmdDemoSkip,
+  'policy-check': cmdPolicyCheck,
+  'audit': cmdAudit,
+  'scan': cmdScan,
+  'history': cmdShowHistory,
+};
+
+function cmdHelp() {
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">help</div>
+      <div class="info-box" data-label="AVAILABLE COMMANDS">
+        <table class="help-table">
+          <tr><td colspan="2" style="padding:4px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:var(--cyan); border-bottom:1px solid rgba(6,182,212,0.3);">QUICK START</td></tr>
+          <tr><td class="cmd-name" style="color:var(--cyan)">demo</td><td class="cmd-desc" style="color:var(--cyan)">Auto-play 60s IAM governance demonstration — recommended for first-time visitors</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">PORTFOLIO</td></tr>
+          <tr><td class="cmd-name">whoami</td><td class="cmd-desc">Display identity and background of current user</td></tr>
+          <tr><td class="cmd-name">skills</td><td class="cmd-desc">List technical skills and proficiency levels</td></tr>
+          <tr><td class="cmd-name">show-projects</td><td class="cmd-desc">List all portfolio projects</td></tr>
+          <tr><td class="cmd-name">view-certifications</td><td class="cmd-desc">Display security certifications</td></tr>
+          <tr><td class="cmd-name">contact</td><td class="cmd-desc">Retrieve contact information [REQUIRES AUTH]</td></tr>
+          <tr><td class="cmd-name">download-resume</td><td class="cmd-desc">Download resume [REQUIRES AUTH]</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">IAM LAB</td></tr>
+          <tr><td class="cmd-name">pointsail-lab</td><td class="cmd-desc">Launch PointSail Identity Platform — live IAM environment simulation</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">IDENTITY SWITCHING</td></tr>
+          <tr><td class="cmd-name">su &lt;user&gt;</td><td class="cmd-desc">Switch identity context using PointSail provisioned access</td></tr>
+          <tr><td class="cmd-name">id</td><td class="cmd-desc">Show current identity session and access level</td></tr>
+          <tr><td class="cmd-name">su-exit</td><td class="cmd-desc">Exit switched identity and return to root session</td></tr>
+          <tr><td class="cmd-name" style="color:var(--amber)">policy-check</td><td class="cmd-desc">Evaluate SoD rules and access gates for current identity session</td></tr>
+          <tr><td class="cmd-name" style="color:var(--amber)">audit</td><td class="cmd-desc">Show audit trail for the current identity session from PointSail governance log</td></tr>
+          <tr><td class="cmd-name" style="color:var(--amber)">scan</td><td class="cmd-desc">Run identity-aware network topology scan and threat surface analysis</td></tr>
+          <tr><td colspan="2" style="padding:10px 0 6px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:3px; color:#555; border-bottom:1px solid var(--border);">SYSTEM</td></tr>
+          <tr><td class="cmd-name">history</td><td class="cmd-desc">List all commands run this session — click any to replay</td></tr>
+          <tr><td class="cmd-name">clear</td><td class="cmd-desc">Clear terminal output</td></tr>
+        </table>
+      </div>
+    </div>
+  `);
+}
+
+function cmdWhoami() {
+  if (suSession) {
+    const s = suSession;
+    const riskColor = s.score >= 70 ? 'var(--red)' : s.score >= 40 ? 'var(--amber)' : 'var(--green)';
+    const lvlLabel = s.accessLevel === 'full' ? '<span style="color:var(--green)">FULL</span>' : s.accessLevel === 'standard' ? '<span style="color:var(--cyan)">STANDARD</span>' : '<span style="color:var(--amber)">LIMITED</span>';
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">whoami</div>
+        <div class="info-box" data-label="IDENTITY CUBE — ${s.id.toUpperCase()}">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <div style="width:42px;height:42px;border-radius:50%;background:${riskColor};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0">${s.name.split(' ').map(n=>n[0]).join('').substring(0,2)}</div>
+            <div>
+              <div style="font-family:'Orbitron',monospace;font-size:15px;color:var(--green);text-shadow:0 0 15px var(--green)">${s.name}</div>
+              <div style="color:var(--cyan);font-size:12px;margin-top:2px">${s.title}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:140px 1fr;gap:4px 12px;font-size:12px;margin-bottom:12px">
+            <div style="color:#555">EMPLOYEE ID</div><div style="color:var(--green-dim)">${s.empid}</div>
+            <div style="color:#555">DEPARTMENT</div><div style="color:var(--green-dim)">${s.dept}</div>
+            <div style="color:#555">MANAGER</div><div style="color:var(--green-dim)">${s.mgr}</div>
+            <div style="color:#555">LOCATION</div><div style="color:var(--green-dim)">${s.loc}</div>
+            <div style="color:#555">SOURCE</div><div style="color:var(--green-dim)">${s.source}</div>
+            <div style="color:#555">RISK SCORE</div><div style="color:${riskColor};font-weight:700">${s.risk} (${s.score}/100)</div>
+            <div style="color:#555">ACCOUNT</div><div><span class="status-dot ${s.status==='Active'?'active':'inactive'}"></span><span style="color:${s.status==='Active'?'var(--green)':'var(--red)'}">${s.status.toUpperCase()}</span></div>
+            <div style="color:#555">ACCESS LEVEL</div><div>${lvlLabel}</div>
+            <div style="color:#555">LAST LOGIN</div><div style="color:var(--green-dim)">${s.login}</div>
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">
+            <div style="color:#555;font-size:11px;letter-spacing:2px;margin-bottom:6px">ENTITLEMENTS (${(s.access||[]).length})</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">${(s.access||[]).map(a=>`<span class="tag" style="font-size:10px">${a}</span>`).join('')}</div>
+          </div>
+          ${(s.violations||[]).length ? `<div style="border-top:1px solid var(--border);padding-top:10px"><div style="color:var(--red);font-size:11px;letter-spacing:2px;margin-bottom:6px">⚠ ACTIVE VIOLATIONS (${s.violations.length})</div>${s.violations.map(v=>`<div style="color:var(--red);font-size:11px;margin-bottom:4px;padding:4px 8px;background:var(--red-lt);border-radius:4px">• ${v}</div>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    `);
+    return;
+  }
+  const d = DATA.whoami;
+  const metricsHtml = (d.metrics||[]).map(m => `
+    <div style="text-align:center;padding:10px 8px;border:1px solid var(--border);border-radius:6px;background:rgba(0,255,0,0.03)">
+      <div style="font-family:'Orbitron',monospace;font-size:18px;color:var(--green);text-shadow:0 0 12px var(--green);font-weight:700">${m.val}</div>
+      <div style="color:#666;font-size:10px;letter-spacing:1px;margin-top:4px;line-height:1.3">${m.label}</div>
+    </div>`).join('');
+  const domainsHtml = (d.domains||[]).map(dm => `
+    <div style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:rgba(6,182,212,0.03)">
+      <div style="color:var(--cyan);font-size:11px;letter-spacing:1.5px;font-weight:600;margin-bottom:4px">${dm.label}</div>
+      <div style="color:#667;font-size:11px;line-height:1.5">${dm.detail}</div>
+    </div>`).join('');
+  const skillsHtml = Object.entries(d.skills||{}).map(([cat,items]) => `
+    <div style="margin-bottom:10px">
+      <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:5px">${cat.toUpperCase()}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${items.map(sk=>`<span class="tag" style="font-size:10px">${sk}</span>`).join('')}</div>
+    </div>`).join('');
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">whoami</div>
+      <div class="info-box" data-label="IDENTITY RECORD — ROOT">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+          <div style="width:52px;height:52px;border-radius:50%;border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:16px;color:var(--green);text-shadow:0 0 12px var(--green);flex-shrink:0">JW</div>
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-size:17px;color:var(--green);text-shadow:0 0 18px var(--green);margin-bottom:3px">${d.name}</div>
+            <div style="color:var(--cyan);font-size:12px;margin-bottom:5px">${d.title}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="font-size:10px;color:#555">&#9679; ${d.location}</span>
+              <span style="font-size:10px;color:#555">&#9679; ${d.experience}</span>
+              <span style="font-size:10px;color:var(--green)">&#9679; ${d.status}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="whoami-metrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+          ${metricsHtml}
+        </div>
+
+        <div style="color:var(--green-dim);font-size:12px;line-height:1.8;border-top:1px solid var(--border);padding-top:12px;margin-bottom:16px">
+          ${d.bio}
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px">IAM DOMAINS</div>
+          <div class="whoami-domains" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+            ${domainsHtml}
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:10px">TECHNICAL STACK</div>
+          ${skillsHtml}
+        </div>
+        ${!isAuthenticated ? `
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px;display:flex;align-items:center;gap:10px">
+          <span style="color:var(--amber);font-size:11px;letter-spacing:1px">⬡ CLEARANCE GATE</span>
+          <span style="color:#555;font-size:11px">Some resources are locked — run <span style="color:var(--cyan);cursor:pointer" onclick="runCmd('authenticate --mfa')">authenticate --mfa</span> to unlock <span style="color:var(--green-dim)">contact</span> and <span style="color:var(--green-dim)">download-resume</span></span>
+        </div>` : ''}
+      </div>
+    </div>
+  `);
+}
+
+function cmdSkills() {
+  const s = DATA.whoami.skills;
+
+  let html = '<div class="output-block"><div class="cmd-echo">skills</div>';
+  for (const [cat, items] of Object.entries(s)) {
+    html += `<div class="info-box" data-label="${cat.toUpperCase()} STACK">`;
+    html += items.map(skill => `<span class="tag">${skill}</span>`).join('');
+    html += '</div>';
+  }
+  html += '</div>';
+  addOutput(html);
+}
+
+function cmdProjects() {
+  const catMeta = {
+    IAM:        { color:'var(--green)',  label:'IAM / IDENTITY GOVERNANCE' },
+    Cloud:      { color:'var(--cyan)',   label:'CLOUD SECURITY' },
+    Networking: { color:'var(--amber)',  label:'NETWORKING / SIEM' },
+  };
+
+  let html = `
+    <div class="output-block">
+      <div class="cmd-echo">show-projects</div>
+      <div style="margin-bottom:18px">
+        <div style="font-family:'Orbitron',monospace;font-size:10px;letter-spacing:3px;color:var(--green);margin-bottom:6px">PROJECT REGISTRY // ${DATA.projects.length} ENTRIES</div>
+        <div style="font-size:12px;color:#555;line-height:1.7">
+          IAM projects (PROJ-001–004) are backed by a <strong style="color:var(--green-dim)">live working implementation</strong> —
+          click <span style="color:var(--green)">▶ Try it live</span> on any IAM project to open the relevant lab scenario directly.
+        </div>
+      </div>`;
+
+  ['IAM'].forEach(cat => {
+    const projects = DATA.projects.filter(p => p.category === cat);
+    if (!projects.length) return;
+    const m = catMeta[cat];
+
+    html += `<div style="margin-bottom:8px;padding:5px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <span style="font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;color:${m.color}">${m.label}</span>
+      <span style="color:#2a2a2a;font-size:10px">${projects.length} project${projects.length>1?'s':''}</span>
+    </div>`;
+
+    projects.forEach(p => {
+      const sColor = p.status==='active' ? 'var(--green)' : p.status==='wip' ? 'var(--amber)' : '#555';
+      const sLabel = p.status==='active' ? 'LIVE' : p.status==='wip' ? 'IN PROGRESS' : 'ARCHIVED';
+      const labBtn = p.lab ? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,255,65,0.08);border:1px solid rgba(0,255,65,0.3);padding:4px 10px;border-radius:3px;cursor:pointer;font-size:10px;color:var(--green)" onclick="cmdOpenLab('${p.lab.scenario||''}')">▶ ${p.lab.label}</span>` : '';
+
+      html += `
+        <div class="project-card" style="border-left:2px solid ${m.color};margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px">
+            <div>
+              <span style="font-size:10px;color:#444;letter-spacing:1px">${p.id} &nbsp;·&nbsp; ${p.year}</span>
+              <div class="project-title" style="margin-top:2px">${p.name}</div>
+            </div>
+            <span style="font-size:10px;color:${sColor};white-space:nowrap;margin-top:2px"><span class="status-dot ${p.status}"></span>${sLabel}</span>
+          </div>
+          <div class="project-desc" style="margin-bottom:8px">${p.desc}</div>
+          <div style="margin-bottom:10px">${p.stack.map(s=>`<span class="tag cyan">${s}</span>`).join('')}</div>
+          <div style="color:var(--green);font-size:12px;margin-bottom:10px">▸ ${p.impact}</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:8px">
+            ${labBtn}
+            <span style="font-size:11px;color:#444">full details → <span style="color:var(--cyan);cursor:pointer" onclick="runCmd('project ${p.id}')">project ${p.id}</span></span>
+          </div>
+        </div>`;
+    });
+
+    html += '<div style="margin-bottom:12px"></div>';
+  });
+
+  html += '</div>';
+  addOutput(html);
+}
+
+function cmdOpenLab(scenarioId) {
+  try {
+    localStorage.setItem('iam_portfolio_session', JSON.stringify({ launched: Date.now(), source: 'Portfolio Projects' }));
+    if (scenarioId) localStorage.setItem('iam_lab_deeplink', JSON.stringify({ scenario: scenarioId, ts: Date.now() }));
+  } catch(e) {}
+  window.open('pointsail-lab.html', '_blank');
+  addOutput(`
+    <div class="output-block">
+      <div style="font-size:12px;color:var(--green-dim);padding:4px 0">
+        <span style="color:var(--green)">✓</span> PointSail lab opened${scenarioId ? ` — navigating to scenario <span style="color:var(--cyan)">${scenarioId}</span>` : ''}.
+        <span style="color:#444"> Switch to the new tab.</span>
+      </div>
+    </div>
+  `);
+}
+
+function cmdProject(args) {
+  const id = args[0] ? args[0].toUpperCase() : null;
+  if (!id) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">project</div><div style="color:var(--red);font-size:12px;">Usage: project &lt;id&gt; — e.g. <span style="color:var(--green)">project PROJ-001</span></div></div>`);
+    return;
+  }
+  const p = DATA.projects.find(pr => pr.id === id);
+  if (!p) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">project ${id}</div><div style="color:var(--red);font-size:12px;">project: '${id}' not found. Run <span style="color:var(--green)">show-projects</span> to list all projects.</div></div>`);
+    return;
+  }
+  const catColor = {IAM:'var(--green)',Cloud:'var(--cyan)',Networking:'var(--amber)'}[p.category] || 'var(--green)';
+  const sColor = p.status==='active' ? 'var(--green)' : p.status==='wip' ? 'var(--amber)' : '#555';
+  const sLabel = p.status==='active' ? 'LIVE' : p.status==='wip' ? 'IN PROGRESS' : 'ARCHIVED';
+  const highlightHtml = p.highlights.map(h => `
+    <div style="display:flex;gap:8px;margin:6px 0;font-size:12px">
+      <span style="color:${catColor};flex-shrink:0">▸</span>
+      <span style="color:var(--green-dim);line-height:1.6">${h}</span>
+    </div>`).join('');
+  const labSection = p.lab ? `
+    <div class="info-box" data-label="LIVE IMPLEMENTATION">
+      <div style="font-size:12px;color:#888;line-height:1.7;margin-bottom:12px">
+        This project has a working implementation running live in the PointSail IAM simulator.
+        Click below to open the relevant lab scenario directly.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);border:1px solid rgba(0,255,65,0.35);padding:8px 16px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--green)" onclick="cmdOpenLab('${p.lab.scenario||''}')">▶ ${p.lab.label}</span>
+        <span style="font-size:11px;color:#444">or type: <span style="color:var(--cyan)">pointsail-lab</span></span>
+      </div>
+    </div>` : '';
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">project ${id}</div>
+      <div class="info-box" data-label="${p.id} // ${p.name}">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+          <div style="font-family:'Orbitron',monospace;font-size:13px;color:${catColor}">${p.name}</div>
+          <div style="font-size:10px;color:${sColor}"><span class="status-dot ${p.status}"></span>${sLabel} · ${p.year}</div>
+        </div>
+        <div style="color:var(--green-dim);margin-bottom:12px;line-height:1.8;font-size:12px">${p.desc}</div>
+        <div>${p.stack.map(s=>`<span class="tag cyan">${s}</span>`).join('')}</div>
+      </div>
+      <div class="info-box" data-label="ARCHITECTURE">
+        <pre style="color:var(--green-dim);font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.8;white-space:pre;overflow-x:auto;margin:0">${p.arch}</pre>
+      </div>
+      <div class="info-box" data-label="KEY HIGHLIGHTS">
+        ${highlightHtml}
+      </div>
+      <div class="info-box" data-label="IMPACT">
+        <div style="color:var(--green);font-size:13px;margin-bottom:10px">▸ ${p.impact}</div>
+        <div style="font-size:12px"><span style="color:#555">REPO</span> → <a href="${p.github}" target="_blank" style="color:var(--cyan);text-decoration:none">${p.github}</a></div>
+      </div>
+      ${labSection}
+    </div>
+  `);
+}
+
+let mfaCode = '';
+let mfaInterval = null;
+
+function generateMfaCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function clearMfaTimer() {
+  if (mfaInterval) {
+    clearInterval(mfaInterval);
+    mfaInterval = null;
+  }
+}
+
+function cmdAuthenticate(args, silent) {
+  if (!args.includes('--mfa')) {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">authenticate</div>
+        <div class="access-denied">
+          <div class="denied-text">⚠ AUTHENTICATION ERROR</div>
+          <div style="color:var(--red); font-size:12px;">Missing required flag: --mfa</div>
+          <div style="color:#555; margin-top:8px; font-size:11px;">Usage: authenticate --mfa</div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  if (isAuthenticated) {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">authenticate --mfa</div>
+        <div style="color:var(--green);">✓ Session already authenticated. Access level: FULL</div>
+      </div>
+    `);
+    return;
+  }
+
+  clearMfaTimer();
+  mfaCode = generateMfaCode();
+
+  addOutput(`
+    <div class="output-block">
+      ${silent ? '' : '<div class="cmd-echo">authenticate --mfa</div>'}
+      <div class="mfa-prompt">
+        <div class="mfa-title">⬡ MFA VERIFICATION REQUIRED</div>
+        <div style="color:var(--green-dim); font-size:12px; margin-bottom:8px;">Your one-time passcode:</div>
+        <div class="mfa-digits" id="mfa-digits">
+          ${mfaCode.split('').map(d => `<div class="mfa-digit">${d}</div>`).join('')}
+        </div>
+        <div style="color:#555; font-size:11px; margin-top:8px;">
+          Code expires in <span id="mfa-countdown" style="color:var(--amber); font-weight:bold;">30</span>s — refreshes automatically
+        </div>
+        <div style="margin-top:12px; color:var(--amber); font-size:12px;" id="mfa-hint">↑ Type the 6-digit code above and press Enter</div>
+      </div>
+    </div>
+  `);
+
+  let timeLeft = 30;
+
+  mfaInterval = setInterval(() => {
+    timeLeft--;
+
+    const countdownEl = document.getElementById('mfa-countdown');
+    if (countdownEl) countdownEl.textContent = timeLeft;
+
+    if (timeLeft <= 0) {
+      // Invalidate old code and issue a new one
+      mfaCode = generateMfaCode();
+      timeLeft = 30;
+
+      const digitsEl = document.getElementById('mfa-digits');
+      if (digitsEl) {
+        digitsEl.innerHTML = mfaCode.split('').map(d => `<div class="mfa-digit">${d}</div>`).join('');
+      }
+
+      const hintEl = document.getElementById('mfa-hint');
+      if (hintEl) hintEl.textContent = '↑ Type the 6-digit code above and press Enter';
+
+      if (countdownEl) countdownEl.textContent = timeLeft;
+    }
+  }, 1000);
+}
+
+function cmdVerify(args) {
+  const code = args[0];
+  if (code === mfaCode) {
+    isAuthenticated = true;
+    clearMfaTimer();
+    document.getElementById('auth-status').className = 'auth-badge';
+    document.getElementById('auth-status').innerHTML = '◉ AUTHENTICATED';
+    document.getElementById('prompt-text').textContent = 'SEC-PORT-01 [root]';
+    addOutput(`
+      <div class="output-block">
+        <div class="info-box" data-label="AUTH SUCCESS" style="border-color:var(--green);">
+          <div style="color:var(--green); font-family:'Orbitron',monospace; font-size:13px; margin-bottom:8px;">✓ IDENTITY VERIFIED — FULL ACCESS GRANTED</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Session elevated to: AUTHENTICATED</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Permissions granted: [READ_ALL] [CONTACT] [EXPORT]</div>
+          <div style="color:var(--green-dim); margin-top:8px; font-size:12px;">Full access unlocked — see available commands below.</div>
+        </div>
+      </div>
+    `);
+    printHelpPanel();
+  } else {
+    addOutput(`
+      <div class="output-block">
+        <div class="access-denied">
+          <div class="denied-text">✕ VERIFICATION FAILED</div>
+          <div style="color:var(--red); font-size:12px;">Incorrect code — check the digits above and try again.</div>
+          <div style="color:#555; margin-top:6px; font-size:11px;">IAM POLICY: ALLOW — Condition: mfa_authenticated == true (FALSE)</div>
+        </div>
+      </div>
+    `);
+  }
+}
+
+function cmdCerts() {
+  let html = '<div class="output-block"><div class="cmd-echo">view-certifications</div>';
+  html += `<div style="color:var(--green-dim); margin-bottom:12px; font-size:12px;">${DATA.certs.length} certifications on record</div>`;
+
+  DATA.certs.forEach(c => {
+    html += `
+      <div class="cert-badge">
+        <div class="cert-icon">${c.icon}</div>
+        <div style="flex:1;">
+          <div class="cert-name">${c.name}</div>
+          <div class="cert-meta">${c.org} · ${c.year}</div>
+        </div>
+        <div><span style="font-size:10px;color:var(--green);letter-spacing:.5px">✓ CERTIFIED</span></div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  addOutput(html);
+}
+
+function cmdContact() {
+  if (suSession && suSession.accessLevel === 'limited') {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">contact</div>
+        <div class="access-denied">
+          <div class="denied-text">⛔ POLICY DENY</div>
+          <div style="color:var(--red); font-size:12px; margin-bottom:8px;">Access denied for identity: ${suSession.id}</div>
+          <div style="color:#666; font-size:11px; font-family:'Share Tech Mono';">
+            Policy evaluation:<br>
+            &nbsp;&nbsp;Effect: DENY<br>
+            &nbsp;&nbsp;Condition: access_level IN [full, standard] → <span style="color:var(--red)">FALSE</span><br>
+            &nbsp;&nbsp;Subject access_level: <span style="color:var(--amber)">LIMITED</span> (contractor role)<br>
+            &nbsp;&nbsp;Resource: contact — classified as internal
+          </div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  if (!isAuthenticated) {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">contact</div>
+        <div class="access-denied">
+          <div class="denied-text">⛔ ACCESS DENIED</div>
+          <div style="color:var(--red); font-size:12px; margin-bottom:8px;">Permission denied: contact requires authentication.</div>
+          <div style="color:#666; font-size:11px; font-family:'Share Tech Mono';">
+            Policy evaluation:<br>
+            &nbsp;&nbsp;Effect: DENY<br>
+            &nbsp;&nbsp;Condition: mfa_authenticated == true → <span style="color:var(--red)">FALSE</span><br>
+            &nbsp;&nbsp;Required: run "authenticate --mfa" first
+          </div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  const c = DATA.contact;
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">contact</div>
+      <div class="info-box" data-label="CONTACT DIRECTORY">
+        <div class="contact-row"><span class="contact-label">EMAIL</span><span class="contact-val"><a href="mailto:${c.email}">${c.email}</a></span></div>
+        <div class="contact-row"><span class="contact-label">GITHUB</span><span class="contact-val"><a href="#">${c.github}</a></span></div>
+        <div class="contact-row"><span class="contact-label">LINKEDIN</span><span class="contact-val"><a href="#">${c.linkedin}</a></span></div>
+        <div class="contact-row"><span class="contact-label">PGP KEY</span><span class="contact-val" style="color:var(--green-dim);">${c.pgp}</span></div>
+        <div style="margin-top:12px; color:#555; font-size:11px; border-top:1px solid var(--border); padding-top:8px;">
+          ⚠ This contact data was released because you passed MFA verification.
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function openResumePreview() {
+  document.getElementById('resume-modal').classList.add('active');
+}
+
+function closeResumePreview() {
+  document.getElementById('resume-modal').classList.remove('active');
+}
+
+function downloadResumeFromModal() {
+  const filename = 'resume.docx';
+  const displayName = 'Jamian_Worrell_Resume.docx';
+  const link = document.createElement('a');
+  link.href = filename;
+  link.download = displayName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  closeResumePreview();
+  addOutput(`
+    <div class="output-block">
+      <div class="info-box" data-label="FILE TRANSFER" style="border-color:var(--green);">
+        <div class="log-line"><span class="level-ok">[SYS]</span> Download started: <span style="color:var(--cyan);">${displayName}</span></div>
+        <div style="color:#555; font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">⚠ File released under authenticated session. Transfer logged.</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdDownloadResume() {
+  if (suSession && suSession.accessLevel === 'limited') {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">download-resume</div>
+        <div class="access-denied">
+          <div class="denied-text">⛔ POLICY DENY</div>
+          <div style="color:var(--red); font-size:12px; margin-bottom:8px;">Access denied for identity: ${suSession.id}</div>
+          <div style="color:#666; font-size:11px; font-family:'Share Tech Mono';">
+            Policy evaluation:<br>
+            &nbsp;&nbsp;Effect: DENY<br>
+            &nbsp;&nbsp;Condition: access_level IN [full, standard] → <span style="color:var(--red)">FALSE</span><br>
+            &nbsp;&nbsp;Subject access_level: <span style="color:var(--amber)">LIMITED</span> (contractor role)<br>
+            &nbsp;&nbsp;Resource: download-resume — export-classified
+          </div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  if (!isAuthenticated) {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">download-resume</div>
+        <div class="access-denied">
+          <div class="denied-text">⛔ ACCESS DENIED</div>
+          <div style="color:var(--red); font-size:12px; margin-bottom:8px;">Permission denied: download-resume requires authentication.</div>
+          <div style="color:#666; font-size:11px; font-family:'Share Tech Mono';">
+            Policy evaluation:<br>
+            &nbsp;&nbsp;Effect: DENY<br>
+            &nbsp;&nbsp;Condition: mfa_authenticated == true → <span style="color:var(--red)">FALSE</span><br>
+            &nbsp;&nbsp;Required: run "authenticate --mfa" first
+          </div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">download-resume</div>
+      <div class="info-box" data-label="FILE ACCESS" style="border-color:var(--green);">
+        <div class="log-line"><span class="level-ok">[SYS]</span> Decrypting resume.pdf... OK</div>
+        <div class="log-line"><span class="level-ok">[SYS]</span> Opening secure preview window...</div>
+        <div style="color:var(--green-dim); font-size:12px; margin-top:8px;">Preview loaded — click <span style="color:var(--green);">▶ DOWNLOAD</span> to save.</div>
+      </div>
+    </div>
+  `);
+  openResumePreview();
+}
+
+function cmdClear() {
+  clearMfaTimer();
+  document.getElementById('output').innerHTML = '';
+  printHelpPanel();
+}
+
+function cmdStatus() {
+  const now = new Date();
+
+  // Read live lab state from localStorage
+  let labOnline = false, labIdentities = 0, labViolations = 0, labOpenReqs = 0, labCertItems = 0;
+  try {
+    const raw = localStorage.getItem('ps_lab_v2');
+    if (raw) {
+      const lab = JSON.parse(raw);
+      labOnline = true;
+      labIdentities = (lab.identities || []).length;
+      labViolations = (lab.violations || []).filter(v => v.status !== 'Resolved').length;
+      labOpenReqs   = (lab.requests || []).filter(r => r.status === 'Pending').length;
+      labCertItems  = (lab.certItems || []).filter(c => c.decision === 'Pending').length;
+    }
+  } catch(e) {}
+
+  const suInfo = suSession
+    ? `<span style="color:var(--cyan)">${suSession.id}</span> <span style="color:#555">(${suSession.accessLevel})</span>`
+    : `<span style="color:#555">none — root session</span>`;
+  const authColor = isAuthenticated ? 'var(--green)' : 'var(--amber)';
+  const labColor  = labOnline ? 'var(--green)' : '#555';
+
+  const row = (label, val, valColor) =>
+    `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(0,255,65,0.06);font-size:12px">
+       <span style="color:#555">${label}</span>
+       <span style="color:${valColor||'var(--green-dim)'}">${val}</span>
+     </div>`;
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">status</div>
+      <div class="info-box" data-label="IAM POSTURE DASHBOARD">
+
+        <div style="font-size:10px;letter-spacing:2px;color:#444;margin-bottom:8px;font-family:'Orbitron',monospace">SESSION</div>
+        ${row('Terminal', 'ONLINE', 'var(--green)')}
+        ${row('Auth state', isAuthenticated ? 'MFA VERIFIED' : 'UNAUTHENTICATED', authColor)}
+        ${row('Access level', isAuthenticated ? 'FULL' : 'LIMITED', authColor)}
+        ${row('Active identity', suInfo)}
+        ${suSession ? row('Identity risk', `${suSession.risk} (${suSession.score}/100)`, suSession.score >= 70 ? 'var(--red)' : suSession.score >= 40 ? 'var(--amber)' : 'var(--green)') : ''}
+        ${row('Timestamp', now.toLocaleTimeString() + ' · ' + now.toLocaleDateString(), '#666')}
+
+        <div style="font-size:10px;letter-spacing:2px;color:#444;margin:12px 0 8px;font-family:'Orbitron',monospace">POINTSAIL IGA ENGINE</div>
+        ${row('Lab status', labOnline ? 'LOADED' : 'NOT STARTED — run pointsail-lab', labColor)}
+        ${labOnline ? row('Identities under governance', labIdentities.toString(), 'var(--cyan)') : ''}
+        ${labOnline ? row('Open SoD violations', labViolations.toString(), labViolations > 0 ? 'var(--red)' : 'var(--green)') : ''}
+        ${labOnline ? row('Pending access requests', labOpenReqs.toString(), labOpenReqs > 0 ? 'var(--amber)' : 'var(--green)') : ''}
+        ${labOnline ? row('Cert items awaiting review', labCertItems.toString(), labCertItems > 0 ? 'var(--amber)' : 'var(--green)') : ''}
+
+        <div style="font-size:10px;letter-spacing:2px;color:#444;margin:12px 0 8px;font-family:'Orbitron',monospace">INFRASTRUCTURE</div>
+        ${row('TLS', 'ACTIVE — AES-256-GCM', 'var(--green)')}
+        ${row('Policy engine', 'RUNNING — 2 SoD rules loaded', 'var(--green)')}
+        ${row('Audit pipeline', 'CONNECTED — siem-ready', 'var(--green)')}
+        ${row('Session bus', 'localStorage IPC — LIVE', 'var(--green)')}
+
+        ${!isAuthenticated ? `<div style="margin-top:12px;padding:8px 10px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:4px;font-size:11px;color:var(--amber)">
+          ⬡ Run <span style="cursor:pointer;color:var(--cyan)" onclick="runCmd('authenticate --mfa')">authenticate --mfa</span> to elevate to FULL access
+        </div>` : ''}
+      </div>
+    </div>
+  `);
+}
+
+function cmdSudo() {
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">sudo</div>
+      <div class="access-denied">
+        <div class="denied-text">⛔ SUDO ACCESS DENIED</div>
+        <div style="color:var(--red); font-size:12px;">${DATA.whoami.name} is not in the sudoers file. This incident will be reported.</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdLs() {
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">ls</div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:8px 0;">
+        <span style="color:var(--cyan)">projects/</span>
+        <span style="color:var(--cyan)">certs/</span>
+        <span style="color:var(--green)">README.md</span>
+        <span style="color:var(--green)">resume.pdf</span>
+        <span style="color:var(--amber)">contact.enc</span>
+        <span style="color:var(--green)">skills.json</span>
+        <span style="color:#555">shadow [DENIED]</span>
+        <span style="color:var(--green-dim)">snake.exe</span>
+      </div>
+    </div>
+  `);
+}
+
+function cmdCat(args) {
+  const file = args[0];
+  if (!file) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">cat</div><div style="color:var(--red);">Usage: cat &lt;filename&gt;</div></div>`);
+    return;
+  }
+  if (file === 'README.md') {
+    addOutput(`
+      <div class="output-block">
+        <div class="cmd-echo">cat README.md</div>
+        <div class="info-box" data-label="README">
+          <div style="color:var(--green); line-height:1.8;">
+            # Portfolio Terminal v1.0<br><br>
+            Welcome to my interactive portfolio. This terminal gives you direct access<br>
+            to my professional profile, projects, and credentials.<br><br>
+            Run <span style="color:var(--cyan)">help</span> to see all available commands.<br>
+            Authenticate to unlock the full experience.<br><br>
+            Built with: vanilla JS, CSS, and too much caffeine.
+          </div>
+        </div>
+      </div>
+    `);
+  } else if (file === 'contact.enc') {
+    addOutput(`<div class="output-block"><div class="cmd-echo">cat contact.enc</div><div class="access-denied"><div class="denied-text">⚠ ENCRYPTED FILE</div><div style="color:var(--amber); font-size:12px;">Content encrypted. Run "authenticate --mfa" to decrypt.</div></div></div>`);
+  } else {
+    addOutput(`<div class="output-block"><div class="cmd-echo">cat ${file}</div><div style="color:var(--red);">cat: ${file}: No such file or directory</div></div>`);
+  }
+}
+
+// ── DEMO MODE ─────────────────────────────────────────────────────────────────
+let _demoRunning = false;
+let _demoTimers  = [];
+
+function _demoDelay(ms) {
+  return new Promise(res => { const t = setTimeout(res, ms); _demoTimers.push(t); });
+}
+
+function _demoTypeCmd(text) {
+  return new Promise(res => {
+    const input = document.getElementById('cmd-input');
+    input.value = '';
+    let i = 0;
+    const type = () => {
+      if (!_demoRunning) { res(); return; }
+      if (i < text.length) {
+        input.value += text[i++];
+        const t = setTimeout(type, 50 + Math.random() * 50);
+        _demoTimers.push(t);
+      } else {
+        const t = setTimeout(() => { dispatch(text); input.value = ''; res(); }, 380);
+        _demoTimers.push(t);
+      }
+    };
+    type();
+  });
+}
+
+// Render a phase divider — marks transitions clearly mid-scroll
+function _demoPhase(num, label, color) {
+  addOutput(`
+    <div class="output-block" style="margin:6px 0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;color:${color};white-space:nowrap">◈ PHASE ${num} — ${label}</div>
+        <div style="flex:1;height:1px;background:${color};opacity:0.3"></div>
+      </div>
+    </div>
+  `);
+}
+
+// Render a status line inline with output — no separate narration box
+function _demoStatus(text, color) {
+  color = color || 'var(--green-dim)';
+  addOutput(`
+    <div class="output-block" style="padding:2px 0">
+      <div style="font-size:12px;color:${color};display:flex;align-items:center;gap:8px">
+        <span style="opacity:0.5">▸</span><span>${text}</span>
+      </div>
+    </div>
+  `);
+}
+
+// Show/update a persistent skip reminder pinned above the input row
+function _demoShowSkipBar() {
+  let bar = document.getElementById('demo-skip-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'demo-skip-bar';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9997;background:rgba(0,0,0,0.9);border-top:1px solid rgba(6,182,212,0.3);padding:6px 20px;display:flex;align-items:center;justify-content:space-between;font-family:"Share Tech Mono",monospace;font-size:11px;';
+    bar.innerHTML = `
+      <span style="color:rgba(6,182,212,0.7);letter-spacing:1px">◈ DEMO RUNNING</span>
+      <span id="demo-skip-phase" style="color:rgba(255,255,255,0.5)">Phase 1 — Identity Verification</span>
+      <span style="color:rgba(255,255,255,0.35)">Type <span style="color:rgba(6,182,212,0.8)">demo-skip</span> to exit</span>
+    `;
+    document.body.appendChild(bar);
+  }
+  bar.style.display = 'flex';
+}
+
+function _demoUpdatePhase(label) {
+  const el = document.getElementById('demo-skip-phase');
+  if (el) el.textContent = label;
+}
+
+function _demoHideSkipBar() {
+  const bar = document.getElementById('demo-skip-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+async function cmdDemo() {
+  if (_demoRunning) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">demo</div><div style="color:var(--amber);font-size:12px;">Demo already running. Type <span style="color:var(--cyan)">demo-skip</span> to abort.</div></div>`);
+    return;
+  }
+  _demoRunning = true;
+  _demoTimers  = [];
+
+  // Clean up any leftover su session from a previous run
+  if (suSession) { suSession = null; try { localStorage.removeItem('iam_terminal_session'); } catch(e) {} }
+
+  // ── OPENING CARD ──────────────────────────────────────────────────
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">demo</div>
+      <div style="border:1px solid rgba(6,182,212,0.4);border-radius:8px;padding:18px 20px;background:rgba(6,182,212,0.03)">
+        <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:4px;color:rgba(6,182,212,0.9);margin-bottom:14px">◈ IAM GOVERNANCE DEMO</div>
+        <div style="font-size:12px;color:#aaa;line-height:1.8;margin-bottom:14px">
+          This demo walks through a complete IAM governance cycle in ~60 seconds:<br>
+          authentication → identity federation → live session switch → real-time revocation.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;text-align:center">
+          <div style="padding:8px;border:1px solid rgba(6,182,212,0.2);border-radius:4px;color:rgba(6,182,212,0.8)">1 · MFA Auth</div>
+          <div style="padding:8px;border:1px solid rgba(99,102,241,0.2);border-radius:4px;color:rgba(99,102,241,0.8)">2 · Identity Federation</div>
+          <div style="padding:8px;border:1px solid rgba(245,158,11,0.2);border-radius:4px;color:rgba(245,158,11,0.8)">3 · Live Revocation</div>
+        </div>
+      </div>
+    </div>
+  `);
+  _demoShowSkipBar();
+  await _demoDelay(1600);
+  if (!_demoRunning) return;
+
+  // ══ PHASE 1 — MFA AUTH ════════════════════════════════════════════
+  _demoPhase(1, 'MFA AUTHENTICATION', 'rgba(6,182,212,0.8)');
+  _demoUpdatePhase('Phase 1 — MFA Authentication');
+  await _demoDelay(600);
+  if (!_demoRunning) return;
+
+  if (!isAuthenticated) {
+    isAuthenticated = true;
+    clearMfaTimer();
+    mfaCode = null;
+    document.getElementById('auth-status').className = 'auth-badge';
+    document.getElementById('auth-status').innerHTML = '◉ AUTHENTICATED';
+    document.getElementById('prompt-text').textContent = 'SEC-PORT-01 [root]';
+    addOutput(`
+      <div class="output-block">
+        <div class="info-box" data-label="MFA — IDENTITY VERIFIED" style="border-color:rgba(6,182,212,0.5)">
+          <div style="color:var(--green);font-size:12px;margin-bottom:8px">✓ Session authenticated — TOTP validated against seed</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[MFA]</span> One-time passcode accepted · window: 30s TOTP</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Privilege escalation: UNAUTHENTICATED → AUTHENTICATED</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Permissions granted: READ_ALL · CONTACT · EXPORT</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[AUD]</span> Auth event → SIEM audit pipeline</div>
+          <div style="margin-top:8px;font-size:11px;color:#555;font-style:italic">In production: TOTP requires physical authenticator app. Demo auto-bypasses for presentation.</div>
+        </div>
+      </div>
+    `);
+    printHelpPanel();
+    await _demoDelay(2200);
+  } else {
+    _demoStatus('Session already authenticated — Phase 1 skipped.', 'var(--green-dim)');
+    await _demoDelay(600);
+  }
+  if (!_demoRunning) return;
+
+  // ══ PHASE 2 — IDENTITY FEDERATION ════════════════════════════════
+  _demoPhase(2, 'IDENTITY FEDERATION', 'rgba(99,102,241,0.8)');
+  _demoUpdatePhase('Phase 2 — Identity Federation');
+  await _demoDelay(600);
+  if (!_demoRunning) return;
+
+  // ── Launch prompt — window.open must be called from a user gesture ──
+  const labLaunchId = 'demo-lab-launch-' + Date.now();
+  addOutput(`
+    <div class="output-block">
+      <div style="border:1px solid rgba(99,102,241,0.4);border-radius:8px;padding:16px 18px;background:rgba(99,102,241,0.03)">
+        <div style="font-size:12px;color:#aaa;line-height:1.7;margin-bottom:14px">
+          The terminal federates with the <strong style="color:#a5b4fc">PointSail Identity Platform</strong> — an enterprise IAM simulator
+          running live in your browser. Every identity, entitlement, and policy decision is real state, not mock data.
+        </div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SSO]</span> Federation handshake initiated — session token forwarded</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[PROV]</span> Role assigned: PointSail Administrator</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SYS]</span> Identity warehouse ready — awaiting platform launch</div>
+        <div style="margin-top:14px;padding:12px 14px;border:1px dashed rgba(99,102,241,0.4);border-radius:6px;display:flex;align-items:center;gap:14px">
+          <div style="flex:1">
+            <div style="font-size:13px;color:#a5b4fc;margin-bottom:3px;font-weight:600">Launch the PointSail Identity Platform</div>
+            <div style="font-size:11px;color:#555">Loads side-by-side in split view · both systems visible at once · no tab switching</div>
+          </div>
+          <button id="${labLaunchId}" style="background:rgba(99,102,241,0.9);color:#fff;border:none;font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:bold;padding:10px 22px;cursor:pointer;letter-spacing:1px;flex-shrink:0;border-radius:4px;transition:opacity .2s" onclick="
+            this.textContent='Launching…';
+            this.style.opacity='0.6';
+            this.disabled=true;
+            try { localStorage.setItem('iam_portfolio_session', JSON.stringify({ launched: Date.now(), source: 'Demo Mode' })); } catch(e){}
+            _demoEnterSplit();
+            window._demoLabLaunched=true;
+          ">LAUNCH ›</button>
+        </div>
+      </div>
+    </div>
+  `);
+  // Scroll the launch button into view
+  await _demoDelay(100);
+  try { document.getElementById(labLaunchId).scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch(e) {}
+
+  // Wait for click (max 90s)
+  window._demoLabLaunched = false;
+  const labWaitStart = Date.now();
+  while (!window._demoLabLaunched && _demoRunning) {
+    await _demoDelay(300);
+    if (Date.now() - labWaitStart > 90000) break;
+  }
+  if (!_demoRunning) return;
+
+  try {
+    const btn = document.getElementById(labLaunchId);
+    if (btn) { btn.textContent = '✓ Launched'; btn.style.background = 'rgba(0,200,100,0.7)'; btn.style.opacity = '1'; }
+  } catch(e) {}
+
+  // ── Wait for lab iframe boot sequence (~3.5s) ─────────────────────
+  addOutput(`
+    <div class="output-block">
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0">
+        <div style="font-size:18px;animation:spin 2s linear infinite;display:inline-block" id="demo-spin">◌</div>
+        <span style="font-size:12px;color:rgba(99,102,241,0.8)">PointSail booting in the right panel — watch the boot sequence complete…</span>
+      </div>
+    </div>
+  `);
+  await _demoDelay(4200);
+  if (!_demoRunning) return;
+  try { document.getElementById('demo-spin').style.display = 'none'; } catch(e) {}
+
+  // ── Lab is ready — seed sarah.chen and guide the lab ──────────────
+  try {
+    const existing = JSON.parse(localStorage.getItem('ps_lab_v2') || '{}');
+    const sarahSeed = {
+      id:'sarah.chen', name:'Sarah Chen', email:'s.chen@acme.com', empid:'EMP-1042',
+      title:'Senior Software Engineer', dept:'Engineering', mgr:'david.kim',
+      loc:'Austin, TX', start:'Mar 2019', risk:'Low', score:18, status:'Active',
+      login:'Today', source:'Active Directory',
+      access:['IAM Terminal','GitHub Enterprise','Jira Software','Confluence','AWS EC2 Read','Datadog','Slack'],
+      violations:[], history:[{t:'Now', e:'IAM Terminal Provisioned', d:'Granted by jamian.worrell'}]
+    };
+    if (!existing.identities) existing.identities = [];
+    const idx = existing.identities.findIndex(i => i.id === 'sarah.chen');
+    if (idx >= 0) existing.identities[idx] = sarahSeed; else existing.identities.unshift(sarahSeed);
+    localStorage.setItem('ps_lab_v2', JSON.stringify(existing));
+  } catch(e) {}
+
+  // Each step waits long enough for the coach card to be read (~6s visible + 1s transition buffer)
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('navigate-identities')); } catch(e) {}
+  _demoStatus('Lab ready — navigating PointSail to the <strong>Identity Warehouse</strong>', 'rgba(99,102,241,0.8)');
+  await _demoDelay(6500);
+  if (!_demoRunning) return;
+
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('open-sarah')); } catch(e) {}
+  _demoStatus('Opening the <strong>Identity Cube</strong> for sarah.chen', 'rgba(99,102,241,0.8)');
+  await _demoDelay(6500);
+  if (!_demoRunning) return;
+
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('access-tab')); } catch(e) {}
+  _demoStatus('Checking access tab — confirming <strong>IAM Terminal</strong> entitlement', 'rgba(99,102,241,0.8)');
+  await _demoDelay(7500);
+  if (!_demoRunning) return;
+
+  await _demoTypeCmd('su sarah.chen');
+  await _demoDelay(1800);
+  if (!_demoRunning) return;
+
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('show-terminal-live')); } catch(e) {}
+  _demoStatus('<strong style="color:#4ade80">● TERMINAL LIVE</strong> — sarah.chen session active, visible in PointSail', 'var(--green-dim)');
+  await _demoDelay(6500);
+  if (!_demoRunning) return;
+
+  await _demoTypeCmd('whoami');
+  await _demoDelay(3500);
+  if (!_demoRunning) return;
+
+  // ══ PHASE 3 — REAL-TIME REVOCATION ═══════════════════════════════
+  _demoPhase(3, 'REAL-TIME ENFORCEMENT', 'rgba(245,158,11,0.8)');
+  _demoUpdatePhase('Phase 3 — Live Revocation');
+  await _demoDelay(600);
+  if (!_demoRunning) return;
+
+  _demoStatus('Watch the right panel — an administrator is navigating to revoke IAM Terminal from sarah.chen…', 'var(--amber)');
+  await _demoDelay(2000);
+  if (!_demoRunning) return;
+
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('revoke-navigate')); } catch(e) {}
+  addOutput(`
+    <div class="output-block">
+      <div style="border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:12px 14px;background:rgba(245,158,11,0.03)">
+        <div style="font-size:10px;letter-spacing:2px;color:var(--amber);margin-bottom:8px;font-family:'Orbitron',monospace">POINTSAIL ADMIN — REVOCATION IN PROGRESS</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[ADMIN]</span> Actor: jamian.worrell · navigating to sarah.chen → Access</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[SEL]</span> Entitlement selected: <strong style="color:var(--amber)">IAM Terminal</strong></div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[ACT]</span> Action: <strong style="color:var(--red)">REVOKE</strong> — confirmation pending…</div>
+      </div>
+    </div>
+  `);
+  await _demoDelay(5500);
+  if (!_demoRunning) return;
+
+  try { localStorage.setItem('iam_demo_step', JSON.stringify('revoke-terminal')); } catch(e) {}
+  addOutput(`
+    <div class="output-block">
+      <div style="border:1px solid rgba(220,38,38,0.4);border-radius:6px;padding:12px 14px;background:rgba(220,38,38,0.03)">
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[PROV]</span> Deprovisioning plan executed — sarah.chen / IAM Terminal</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[GOV]</span> Entitlement removed from Identity Cube</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[AUD]</span> Audit event written — Access Revoked · sarah.chen · IAM Terminal</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[ENF]</span> <strong style="color:var(--red)">ENFORCEMENT ENGINE TRIGGERED</strong> — propagating to active sessions…</div>
+      </div>
+    </div>
+  `);
+  // Fallback eject after 2s if storage event chain is delayed
+  await _demoDelay(2000);
+  if (!_demoRunning) return;
+  if (suSession) _suEject('IAM Terminal entitlement revoked by administrator in PointSail');
+
+  await _demoDelay(1800);
+  if (!_demoRunning) return;
+
+  // Clean up sarah.chen state
+  try {
+    const state = JSON.parse(localStorage.getItem('ps_lab_v2') || '{}');
+    const sc = (state.identities || []).find(i => i.id === 'sarah.chen');
+    if (sc) sc.access = (sc.access || []).filter(a => a !== 'IAM Terminal');
+    localStorage.setItem('ps_lab_v2', JSON.stringify(state));
+  } catch(e) {}
+
+  // ── Exit split view, return to full terminal ──────────────────────
+  _demoExitSplit();
+
+  // ── CLOSING CARD ─────────────────────────────────────────────────
+  _demoHideSkipBar();
+  addOutput(`
+    <div class="output-block">
+      <div style="border:1px solid rgba(0,255,65,0.4);border-radius:8px;padding:20px 24px;background:rgba(0,255,65,0.025);box-shadow:0 0 24px rgba(0,255,65,0.06)">
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <div style="font-family:'Orbitron',monospace;font-size:10px;letter-spacing:3px;color:var(--green)">✓ DEMO COMPLETE</div>
+          <div style="flex:1;height:1px;background:rgba(0,255,65,0.15)"></div>
+          <div style="font-size:10px;color:#444">IAM GOVERNANCE LOOP</div>
+        </div>
+
+        <div style="font-size:12px;color:#999;line-height:1.9;margin-bottom:18px">
+          What you just watched was a complete real-world IAM governance workflow —
+          MFA authentication, entitlement provisioning via PointSail IGA, cross-system identity federation
+          over a live session bus, and <span style="color:var(--green);font-weight:600">zero-latency access revocation</span>
+          enforced the moment a governance decision was made in a separate system.<br><br>
+          This is what IAM engineers build. This portfolio is a working implementation of it.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+          <div onclick="cmdOpenLab(null)" style="padding:10px 14px;border:1px solid rgba(0,255,65,0.35);border-radius:6px;cursor:pointer;background:rgba(0,255,65,0.04);transition:background .15s" onmouseover="this.style.background='rgba(0,255,65,0.09)'" onmouseout="this.style.background='rgba(0,255,65,0.04)'">
+            <div style="color:var(--green);font-size:11px;font-family:'Orbitron',monospace;letter-spacing:1px;margin-bottom:3px">▶ OPEN FULL LAB</div>
+            <div style="color:#666;font-size:10px">Explore 5 IAM scenarios at your own pace</div>
+          </div>
+          <div onclick="runCmd('show-projects')" style="padding:10px 14px;border:1px solid rgba(0,255,65,0.2);border-radius:6px;cursor:pointer;background:rgba(0,255,65,0.02);transition:background .15s" onmouseover="this.style.background='rgba(0,255,65,0.06)'" onmouseout="this.style.background='rgba(0,255,65,0.02)'">
+            <div style="color:var(--cyan);font-size:11px;font-family:'Orbitron',monospace;letter-spacing:1px;margin-bottom:3px">▶ VIEW PROJECTS</div>
+            <div style="color:#666;font-size:10px">4 IAM projects with live deep-links</div>
+          </div>
+          <div onclick="runCmd('authenticate --mfa')" style="padding:10px 14px;border:1px solid rgba(0,255,65,0.2);border-radius:6px;cursor:pointer;background:rgba(0,255,65,0.02);transition:background .15s" onmouseover="this.style.background='rgba(0,255,65,0.06)'" onmouseout="this.style.background='rgba(0,255,65,0.02)'">
+            <div style="color:var(--amber);font-size:11px;font-family:'Orbitron',monospace;letter-spacing:1px;margin-bottom:3px">⬡ GET IN TOUCH</div>
+            <div style="color:#666;font-size:10px">Authenticate to unlock contact details</div>
+          </div>
+          <div onclick="runCmd('whoami')" style="padding:10px 14px;border:1px solid rgba(0,255,65,0.2);border-radius:6px;cursor:pointer;background:rgba(0,255,65,0.02);transition:background .15s" onmouseover="this.style.background='rgba(0,255,65,0.06)'" onmouseout="this.style.background='rgba(0,255,65,0.02)'">
+            <div style="color:var(--green);font-size:11px;font-family:'Orbitron',monospace;letter-spacing:1px;margin-bottom:3px">▶ ABOUT JAMIAN</div>
+            <div style="color:#666;font-size:10px">Background, domains, and IAM metrics</div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:10px;font-size:10px;color:#444;display:flex;gap:16px;flex-wrap:wrap">
+          <span>Advanced: <span style="color:var(--cyan);cursor:pointer" onclick="runCmd('su sarah.chen')">su sarah.chen</span></span>
+          <span><span style="color:var(--cyan);cursor:pointer" onclick="runCmd('policy-check')">policy-check</span></span>
+          <span><span style="color:var(--cyan);cursor:pointer" onclick="runCmd('scan')">scan</span></span>
+          <span><span style="color:var(--cyan);cursor:pointer" onclick="runCmd('audit')">audit</span></span>
+        </div>
+      </div>
+    </div>
+  `);
+
+  _demoRunning = false;
+}
+
+function cmdDemoSkip() {
+  if (!_demoRunning) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">demo-skip</div><div style="color:var(--amber);font-size:12px;">No demo is currently running.</div></div>`);
+    return;
+  }
+  _demoTimers.forEach(t => clearTimeout(t));
+  _demoTimers = [];
+  _demoRunning = false;
+  _demoHideSkipBar();
+  _demoExitSplit();
+  if (suSession) {
+    suSession = null;
+    _updateAuthBadge();
+    try { localStorage.removeItem('iam_terminal_session'); } catch(e) {}
+    document.getElementById('prompt-text').textContent = isAuthenticated ? 'SEC-PORT-01 [root]' : 'SEC-PORT-01 ~';
+  }
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">demo-skip</div>
+      <div style="color:var(--amber);font-size:12px;">Demo aborted. Terminal restored to interactive mode.</div>
+    </div>
+  `);
+}
+
+function cmdExit() {
+  clearMfaTimer();
+  addOutput(`<div class="output-block"><div class="cmd-echo">exit</div><div style="color:var(--green-dim);">Session terminated. Goodbye.</div></div>`);
+  setTimeout(() => {
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:\'Share Tech Mono\',monospace;color:#003322;background:#000;font-size:24px;">CONNECTION CLOSED</div>';
+    setTimeout(() => location.reload(), 2000);
+  }, 500);
+}
+
+function cmdPointsailLab() {
+  // Write session handshake to localStorage so the lab can read it
+  try {
+    localStorage.setItem('iam_portfolio_session', JSON.stringify({
+      launched: Date.now(),
+      authenticated: isAuthenticated,
+      source: 'IAM Portfolio Terminal'
+    }));
+  } catch(e) {}
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">pointsail-lab</div>
+      <div class="info-box" data-label="POINTSAIL IDENTITY PLATFORM // LAB ENVIRONMENT">
+        <div class="log-line"><span class="ts">00:00:01</span><span class="level-ok">[SSO]</span> Initiating identity federation handshake…</div>
+        <div class="log-line"><span class="ts">00:00:02</span><span class="level-ok">[IAM]</span> Session token forwarded to PointSail tenant</div>
+        <div class="log-line"><span class="ts">00:00:03</span><span class="level-ok">[PROV]</span> Role: PointSail Administrator — entitlements granted</div>
+        <div class="log-line"><span class="ts">00:00:04</span><span class="level-ok">[SYS]</span> Launching PointSail Identity Platform…</div>
+        <div style="margin-top:12px; padding:10px; background:rgba(0,255,65,0.04); border:1px solid var(--border); border-radius:4px;">
+          <div style="color:var(--green); font-size:12px; margin-bottom:6px;">▶ ENVIRONMENT READY</div>
+          <div style="color:var(--green-dim); font-size:12px; line-height:1.8;">
+            The PointSail lab is a full IAM simulation — manage identities, run certifications,<br>
+            resolve SoD violations, and remediate access policy breaches.<br>
+            <br>
+            Use <span style="color:var(--cyan);">su &lt;username&gt;</span> to switch into a provisioned identity from the lab.
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  setTimeout(() => { window.open('pointsail-lab.html', '_blank'); }, 400);
+}
+
+// ── AUTH BADGE HELPER ─────────────────────────────────────────────────────
+function _updateAuthBadge() {
+  const el = document.getElementById('auth-status');
+  if (!el) return;
+  if (suSession) {
+    const lvlIcon = suSession.accessLevel === 'full' ? '▲' : suSession.accessLevel === 'standard' ? '●' : '▼';
+    el.className = 'auth-badge su-session';
+    el.innerHTML = `◈ su: ${suSession.id} <span style="font-size:9px;opacity:0.7;margin-left:2px">[${suSession.accessLevel.toUpperCase()}]</span>`;
+  } else if (isAuthenticated) {
+    el.className = 'auth-badge';
+    el.innerHTML = '◉ AUTHENTICATED';
+  } else {
+    el.className = 'auth-badge unauth';
+    el.innerHTML = '◉ UNAUTHENTICATED';
+  }
+}
+
+// ── SESSION TTL ──────────────────────────────────────────────────────────────
+function _suStartTTL() {
+  _suClearTTL();
+  _suTTLTimer = setTimeout(() => {
+    if (!suSession) return;
+    addOutput(`
+      <div class="output-block">
+        <div class="info-box" data-label="⚠ SESSION EXPIRY WARNING" style="border-color:var(--amber)">
+          <div style="color:var(--amber);font-family:'Orbitron',monospace;font-size:11px;margin-bottom:6px">TOKEN EXPIRY IN 2 MINUTES</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[SEC]</span> Identity: ${suSession.name} (${suSession.id})</div>
+          <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[IAM]</span> Access token TTL: 120s remaining — session will terminate</div>
+          <div style="color:var(--amber);font-size:11px;margin-top:8px">Run <span style="color:var(--green)">su ${suSession.id}</span> to re-authenticate, or <span style="color:var(--green)">su-exit</span> to close the session.</div>
+        </div>
+      </div>
+    `);
+  }, SU_WARN_MS);
+  _suExpireTimer = setTimeout(() => {
+    if (!suSession) return;
+    _suEject(`Access token expired — TTL of ${SU_TTL_MS / 60000} minutes exceeded`);
+  }, SU_TTL_MS);
+}
+
+function _suClearTTL() {
+  clearTimeout(_suTTLTimer);
+  clearTimeout(_suExpireTimer);
+  _suTTLTimer = null;
+  _suExpireTimer = null;
+}
+
+// ── IDENTITY SWITCHING (su) ────────────────────────────────────────────────
+function _suAccessLevel(identity) {
+  const t = (identity.title || '').toLowerCase();
+  if (['vp','cfo','cto','ciso','director','manager','administrator','admin'].some(k => t.includes(k))) return 'full';
+  if (identity.dept === 'Contractors') return 'limited';
+  return 'standard';
+}
+
+function _suGetLabState() {
+  try { return JSON.parse(localStorage.getItem('ps_lab_v2')) || null; } catch(e) { return null; }
+}
+
+function _suWriteAudit(action, userId, detail) {
+  try {
+    const state = _suGetLabState();
+    if (!state) return;
+    if (!Array.isArray(state.auditLog)) state.auditLog = [];
+    state.auditLog.unshift({ id: Date.now(), ts: new Date().toISOString(), actor: 'IAM Terminal', action, entity: userId, detail });
+    if (state.auditLog.length > 500) state.auditLog.pop();
+    localStorage.setItem('ps_lab_v2', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function cmdSu(args) {
+  const userId = (args[0] || '').toLowerCase().trim();
+  if (!userId) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su</div><div style="color:var(--amber);font-size:12px;">Usage: <span style="color:var(--green)">su &lt;username&gt;</span> — e.g. <span style="color:var(--green)">su sarah.chen</span><br><span style="color:#555;font-size:11px;">Identity must have IAM Terminal provisioned in PointSail. Open the lab and grant access first.</span></div></div>`);
+    return;
+  }
+  const state = _suGetLabState();
+  if (!state) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su ${userId}</div><div class="access-denied"><div class="denied-text">⛔ POINTSAIL OFFLINE</div><div style="color:var(--red);font-size:12px;">No PointSail lab state found. Run <span style="color:var(--green)">pointsail-lab</span> to initialize the environment.</div></div></div>`);
+    return;
+  }
+  const identity = (state.identities || []).find(i => i.id === userId);
+  if (!identity) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su ${userId}</div><div class="access-denied"><div class="denied-text">⛔ IDENTITY NOT FOUND</div><div style="color:var(--red);font-size:12px;">User <strong>${userId}</strong> does not exist in the PointSail identity store.<br><span style="color:#555;font-size:11px;">Check spelling — identity IDs are case-sensitive (e.g. sarah.chen)</span></div></div></div>`);
+    return;
+  }
+  if (identity.status === 'Inactive') {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su ${userId}</div><div class="access-denied"><div class="denied-text">⛔ ACCOUNT DISABLED</div><div style="color:var(--red);font-size:12px;">Identity <strong>${identity.name}</strong> is marked Inactive in PointSail.<br><span style="color:#555;font-size:11px;">Re-enable the account in the PointSail lab before switching.</span></div></div></div>`);
+    _suWriteAudit('SU Failed', userId, `Blocked: account inactive`);
+    return;
+  }
+  const hasPwdIssue = (state.pwdData||[]).find(p => p.id === userId && p.status === 'locked');
+  if (hasPwdIssue) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su ${userId}</div><div class="access-denied"><div class="denied-text">⛔ ACCOUNT LOCKED</div><div style="color:var(--red);font-size:12px;">Password for <strong>${identity.name}</strong> is locked.<br><span style="color:#555;font-size:11px;">Unlock the account in PointSail → Password Management before switching.</span></div></div></div>`);
+    _suWriteAudit('SU Failed', userId, `Blocked: account locked`);
+    return;
+  }
+  if (!(identity.access || []).includes('IAM Terminal')) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su ${userId}</div><div class="access-denied"><div class="denied-text">⛔ ACCESS DENIED — ENTITLEMENT MISSING</div><div style="color:var(--red);font-size:12px;margin-bottom:8px;">Identity <strong>${identity.name}</strong> does not have <strong>IAM Terminal</strong> provisioned.</div><div style="color:var(--amber);font-size:11px;line-height:1.8">To grant access:<br>1. Open the PointSail lab (<span style="color:var(--green)">pointsail-lab</span>)<br>2. Navigate to Identities → select <strong>${identity.name}</strong><br>3. Access tab → + Add → <strong>IAM Terminal</strong><br>— or — Self-Service Portal → App Catalog → IAM Terminal → Request</div></div></div>`);
+    _suWriteAudit('SU Failed', userId, `Blocked: IAM Terminal entitlement not provisioned`);
+    return;
+  }
+  const accessLevel = _suAccessLevel(identity);
+  const pwdWarn = (state.pwdData||[]).find(p => p.id === userId && p.status === 'expiring');
+  suSession = { ...identity, accessLevel };
+  try {
+    localStorage.setItem('iam_terminal_session', JSON.stringify({ user: userId, name: identity.name, grantedAt: Date.now(), accessLevel }));
+  } catch(e) {}
+  _suWriteAudit('SU Login', userId, `${identity.name} authenticated to IAM Portfolio Terminal (level: ${accessLevel})`);
+  const lvlColor = accessLevel === 'full' ? 'var(--green)' : accessLevel === 'standard' ? 'var(--cyan)' : 'var(--amber)';
+  document.getElementById('prompt-text').textContent = `${userId}@iam-terminal`;
+  _updateAuthBadge();
+  _suStartTTL();
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">su ${userId}</div>
+      <div class="info-box" data-label="SESSION SWITCH — IDENTITY CONTEXT LOADED" style="border-color:var(--green)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:36px;height:36px;border-radius:50%;background:${identity.score>=70?'var(--red)':identity.score>=40?'var(--amber)':'var(--blue)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff">${identity.name.split(' ').map(n=>n[0]).join('').substring(0,2)}</div>
+          <div><div style="color:var(--green);font-family:'Orbitron',monospace;font-size:13px">${identity.name}</div><div style="color:var(--muted);font-size:11px">${identity.email} · ${identity.dept}</div></div>
+        </div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Identity context loaded from PointSail directory</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Entitlement verified: <strong>IAM Terminal</strong> — GRANTED</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SEC]</span> Access level: <span style="color:${lvlColor};font-weight:600">${accessLevel.toUpperCase()}</span> — ${(identity.access||[]).length} entitlements loaded</div>
+        ${(identity.violations||[]).length ? `<div class="log-line"><span class="ts">NOW</span><span class="level-warn">[POL]</span> ⚠ ${identity.violations.length} active policy violation(s) on this identity</div>` : ''}
+        ${pwdWarn ? `<div class="log-line"><span class="ts">NOW</span><span class="level-warn">[PWD]</span> ⚠ Password expiring soon — notify user to update in PointSail</div>` : ''}
+        <div style="margin-top:10px;color:var(--green-dim);font-size:11px">Session is live — token TTL: <span style="color:var(--amber)">15 min</span>. Access changes in PointSail enforce immediately. <span style="color:var(--green)">su-exit</span> to close · <span style="color:var(--green)">policy-check</span> to evaluate.</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdSuExit() {
+  if (!suSession) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">su-exit</div><div style="color:var(--amber);font-size:12px;">No active su session. You are already running as root.</div></div>`);
+    return;
+  }
+  const name = suSession.name;
+  const id = suSession.id;
+  _suWriteAudit('SU Logout', id, `${name} session closed by user`);
+  _suClearTTL();
+  suSession = null;
+  try { localStorage.removeItem('iam_terminal_session'); } catch(e) {}
+  document.getElementById('prompt-text').textContent = 'SEC-PORT-01 [root]';
+  _updateAuthBadge();
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">su-exit</div>
+      <div class="info-box" data-label="SESSION RESTORED" style="border-color:var(--green)">
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Identity context cleared — ${name}</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SYS]</span> Returned to root session</div>
+        <div style="color:var(--green-dim);margin-top:8px;font-size:11px">Session event logged to PointSail audit trail.</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdId() {
+  if (!suSession) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">id</div><div class="info-box" data-label="SESSION CONTEXT"><div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SYS]</span> uid=0(root) — Authenticated administrator</div><div style="color:var(--green-dim);font-size:11px;margin-top:6px">No identity switch active. Use <span style="color:var(--green)">su &lt;username&gt;</span> to load a PointSail identity.</div></div></div>`);
+    return;
+  }
+  const s = suSession;
+  const lvlColor = s.accessLevel === 'full' ? 'var(--green)' : s.accessLevel === 'standard' ? 'var(--cyan)' : 'var(--amber)';
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">id</div>
+      <div class="info-box" data-label="ACTIVE SESSION">
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[SYS]</span> Identity: <strong style="color:var(--green)">${s.id}</strong> (${s.name})</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Access level: <span style="color:${lvlColor};font-weight:600">${s.accessLevel.toUpperCase()}</span></div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Department: ${s.dept} · Manager: ${s.mgr}</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-ok">[IAM]</span> Entitlements: ${(s.access||[]).length} · Risk score: ${s.score}/100</div>
+        ${(s.violations||[]).length ? `<div class="log-line"><span class="ts">NOW</span><span class="level-warn">[POL]</span> ⚠ ${s.violations.length} SoD violation(s) active</div>` : ''}
+        <div style="color:var(--green-dim);font-size:11px;margin-top:8px">Token TTL: <span style="color:var(--amber)">15 min</span> · synced with PointSail · <span style="color:var(--green)">policy-check</span> to evaluate access · <span style="color:var(--green)">su-exit</span> to close</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdPolicyCheck() {
+  if (!suSession) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">policy-check</div><div style="color:var(--amber);font-size:12px;">No active su session. Switch to an identity first: <span style="color:var(--green)">su &lt;username&gt;</span></div></div>`);
+    return;
+  }
+  const s = suSession;
+  const access = s.access || [];
+
+  // SoD rules — mirrors the lab's SOD_RULES
+  const SOD_RULES = [
+    { name:'Finance-IT SoD', severity:'CRITICAL',
+      left:  ['Finance_Users','SAP Finance','Oracle Finance','Finance Reports Write','SAP Finance Write','Oracle ERP Full'],
+      right: ['IT_Admins','IT Admin','Azure AD Admin','AWS Admin','Active Directory Admin','IT Help Desk Admin','IT Network Admin','Global Admin','CyberArk','Splunk Admin'] },
+    { name:'HR-Finance SoD', severity:'HIGH',
+      left:  ['Workday HCM Full','ADP Workforce','HR Reports Full'],
+      right: ['SAP Finance Full','Oracle ERP Full','Finance Reports Write'] }
+  ];
+
+  const violations = [];
+  for (const rule of SOD_RULES) {
+    const leftMatch  = access.filter(a => rule.left.some(k  => a.toLowerCase().includes(k.toLowerCase().split(' ')[0])));
+    const rightMatch = access.filter(a => rule.right.some(k => a.toLowerCase().includes(k.toLowerCase().split(' ')[0])));
+    if (leftMatch.length && rightMatch.length) {
+      violations.push({ rule: rule.name, severity: rule.severity, left: leftMatch, right: rightMatch });
+    }
+  }
+
+  // Privileged access count
+  const privEntitlements = access.filter(a => ['Admin','Full Access','Owner','Super','CyberArk','Splunk Admin'].some(k => a.includes(k)));
+  const privOver = privEntitlements.length > 5;
+
+  // Access level gate
+  const gated = [];
+  if (s.accessLevel === 'limited') gated.push({ resource:'download-resume', reason:'CONTRACTOR — role does not include export rights' });
+  if (s.accessLevel === 'limited') gated.push({ resource:'contact', reason:'CONTRACTOR — PII access restricted' });
+  if (s.violations?.length) gated.push({ resource:'elevated-actions', reason:`${s.violations.length} active SoD violation(s) block privilege escalation` });
+
+  const riskColor = s.score >= 70 ? 'var(--red)' : s.score >= 40 ? 'var(--amber)' : 'var(--green)';
+  const overallVerdict = violations.length || privOver ? 'NON-COMPLIANT' : 'COMPLIANT';
+  const verdictColor   = overallVerdict === 'COMPLIANT' ? 'var(--green)' : 'var(--red)';
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">policy-check</div>
+      <div class="info-box" data-label="POLICY EVALUATION — ${s.id.toUpperCase()}" style="border-color:${verdictColor}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-size:12px;color:${verdictColor}">${overallVerdict === 'COMPLIANT' ? '✓' : '⚠'} ${overallVerdict}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${s.name} · ${s.dept} · Risk ${s.score}/100</div>
+          </div>
+          <span style="font-size:10px;padding:3px 8px;border:1px solid ${riskColor};color:${riskColor};border-radius:3px">${s.risk.toUpperCase()} RISK</span>
+        </div>
+
+        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:6px;font-family:'Orbitron',monospace">SoD EVALUATION</div>
+        ${violations.length === 0
+          ? `<div style="color:var(--green);font-size:12px;padding:6px 0">✓ No Separation of Duties conflicts detected across ${access.length} entitlements</div>`
+          : violations.map(v => `
+            <div style="padding:8px 10px;background:rgba(220,38,38,.08);border-left:3px solid var(--red);border-radius:0 4px 4px 0;margin-bottom:6px">
+              <div style="color:var(--red);font-size:12px;font-weight:600;margin-bottom:4px">DENY — ${v.rule} <span style="font-size:10px;opacity:.7">[${v.severity}]</span></div>
+              <div style="font-size:11px;color:var(--muted)">Conflicting: <span style="color:var(--amber)">${v.left.join(', ')}</span> ↔ <span style="color:var(--amber)">${v.right.join(', ')}</span></div>
+            </div>`).join('')
+        }
+
+        <div style="font-size:10px;letter-spacing:2px;color:#555;margin:10px 0 6px;font-family:'Orbitron',monospace">PRIVILEGED ACCESS</div>
+        <div style="font-size:12px;${privOver ? 'color:var(--red)' : 'color:var(--green)'}">
+          ${privOver
+            ? `⚠ ${privEntitlements.length} privileged entitlements — exceeds maximum of 5<div style="font-size:11px;color:var(--amber);margin-top:3px">${privEntitlements.map(e=>`<span class="tag" style="font-size:10px">${e}</span>`).join('')}</div>`
+            : `✓ ${privEntitlements.length} privileged entitlement${privEntitlements.length !== 1 ? 's' : ''} — within policy limit`
+          }
+        </div>
+
+        ${gated.length ? `
+        <div style="font-size:10px;letter-spacing:2px;color:#555;margin:10px 0 6px;font-family:'Orbitron',monospace">ACCESS GATES (THIS SESSION)</div>
+        ${gated.map(g => `<div style="font-size:11px;color:var(--amber);padding:4px 0">⊘ <strong>${g.resource}</strong> — ${g.reason}</div>`).join('')}` : ''}
+
+        <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px;font-size:11px;color:var(--muted)">
+          Evaluated ${access.length} entitlements · ${SOD_RULES.length} policies checked · <span style="color:var(--green-dim)">${new Date().toLocaleTimeString()}</span>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdAudit() {
+  if (!suSession) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">audit</div><div style="color:var(--amber);font-size:12px;">No active su session. Switch to an identity first: <span style="color:var(--green)">su &lt;username&gt;</span></div></div>`);
+    return;
+  }
+  const s = suSession;
+  // Pull live audit log from PointSail lab state
+  let labEvents = [];
+  try {
+    const raw = localStorage.getItem('ps_lab_v2');
+    if (raw) {
+      const lab = JSON.parse(raw);
+      const log = lab.auditLog || [];
+      // Filter events relevant to this identity
+      labEvents = log.filter(e => {
+        const t = (e.target||'').toLowerCase();
+        const act = (e.actor||'').toLowerCase();
+        const desc = (e.description||'').toLowerCase();
+        const uid = s.id.toLowerCase();
+        const uname = s.name.toLowerCase();
+        return t.includes(uid) || t.includes(uname) || act.includes(uid) || act.includes(uname) || desc.includes(uid) || desc.includes(uname);
+      }).slice(-12).reverse();
+    }
+  } catch(e) {}
+
+  // Generate synthetic events if lab has no relevant history
+  const fallback = [
+    { ts: new Date(Date.now()-120000).toLocaleTimeString(), level:'INFO',  actor:'iam-engine',      action:'AUTHENTICATE',    resource:`${s.id}@corp.local` },
+    { ts: new Date(Date.now()-110000).toLocaleTimeString(), level:'INFO',  actor: s.id,             action:'ACCESS_GRANTED',  resource:`app:corporate-sso` },
+    { ts: new Date(Date.now()-95000).toLocaleTimeString(),  level:'INFO',  actor: s.id,             action:'RESOURCE_READ',   resource:`sharepoint://${s.dept.toLowerCase().replace(/ /g,'-')}/docs` },
+    { ts: new Date(Date.now()-72000).toLocaleTimeString(),  level:'INFO',  actor:'iam-engine',      action:'SESSION_CHECK',   resource:`identity:${s.id}` },
+    { ts: new Date(Date.now()-45000).toLocaleTimeString(),  level: s.score >= 70 ? 'WARN' : 'INFO', actor:'policy-engine', action: s.score >= 70 ? 'RISK_FLAGGED' : 'POLICY_PASS', resource:`risk-score:${s.score}` },
+    { ts: new Date(Date.now()-12000).toLocaleTimeString(),  level:'INFO',  actor:'terminal',        action:'SU_SWITCH',       resource:`context:${s.id}` },
+  ];
+
+  const levelColor = l => l === 'WARN' || l === 'ERROR' ? 'var(--amber)' : l === 'CRIT' ? 'var(--red)' : 'var(--green-dim)';
+
+  let rows = '';
+  if (labEvents.length > 0) {
+    rows = labEvents.map(e => {
+      const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '??:??:??';
+      const lvl = (e.action||'INFO').includes('REVOK') || (e.action||'').includes('DENY') ? 'WARN' : 'INFO';
+      return `<tr>
+        <td style="color:#555;white-space:nowrap;padding-right:12px">${ts}</td>
+        <td style="color:${levelColor(lvl)};padding-right:12px">${lvl}</td>
+        <td style="color:var(--cyan);padding-right:12px">${(e.actor||'system').toLowerCase()}</td>
+        <td style="color:#aaa;padding-right:12px">${(e.action||'EVENT').toUpperCase().replace(/ /g,'_')}</td>
+        <td style="color:var(--green-dim);font-size:10px">${(e.description||'').substring(0,60)}</td>
+      </tr>`;
+    }).join('');
+  } else {
+    rows = fallback.map(e => `<tr>
+      <td style="color:#555;white-space:nowrap;padding-right:12px">${e.ts}</td>
+      <td style="color:${levelColor(e.level)};padding-right:12px">${e.level}</td>
+      <td style="color:var(--cyan);padding-right:12px">${e.actor}</td>
+      <td style="color:#aaa;padding-right:12px">${e.action}</td>
+      <td style="color:var(--green-dim);font-size:10px">${e.resource}</td>
+    </tr>`).join('');
+  }
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">audit</div>
+      <div class="info-box" data-label="AUDIT TRAIL — ${s.id.toUpperCase()}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted)">Identity: <span style="color:var(--cyan)">${s.name}</span> · Dept: <span style="color:var(--cyan)">${s.dept}</span></div>
+          <span style="font-size:10px;color:#555">SOURCE: PointSail Audit Engine</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'Share Tech Mono',monospace">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding-bottom:6px;color:#444;font-weight:400;letter-spacing:1.5px">TIME</th>
+              <th style="text-align:left;padding-bottom:6px;color:#444;font-weight:400;letter-spacing:1.5px">LVL</th>
+              <th style="text-align:left;padding-bottom:6px;color:#444;font-weight:400;letter-spacing:1.5px">ACTOR</th>
+              <th style="text-align:left;padding-bottom:6px;color:#444;font-weight:400;letter-spacing:1.5px">ACTION</th>
+              <th style="text-align:left;padding-bottom:6px;color:#444;font-weight:400;letter-spacing:1.5px">RESOURCE</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:8px;font-size:10px;color:#555">
+          ${labEvents.length > 0 ? `${labEvents.length} live event(s) from PointSail audit log` : 'Synthetic audit feed — open PointSail lab for live governance events'} · Session context: <span style="color:var(--green-dim)">${s.id}</span>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdScan() {
+  const ts = () => new Date().toLocaleTimeString();
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  const target = suSession ? suSession.id : 'root@sec-port-01';
+  const dept   = suSession ? suSession.dept : 'Core Infrastructure';
+
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">scan</div>
+      <div class="info-box" data-label="NETWORK TOPOLOGY — IDENTITY SCAN" id="scan-output-box">
+        <div style="color:var(--green);font-size:11px;font-family:'Share Tech Mono',monospace" id="scan-lines">
+          <div>Initiating identity-aware network scan...</div>
+          <div>Target context: <span style="color:var(--cyan)">${target}</span></div>
+          <div>Department scope: <span style="color:var(--cyan)">${dept}</span></div>
+          <div>&nbsp;</div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const scanLines = document.getElementById('scan-lines');
+  const append = (line, color) => {
+    const d = document.createElement('div');
+    d.style.color = color || 'var(--green-dim)';
+    d.innerHTML = line;
+    scanLines.appendChild(d);
+    const panel = document.getElementById('demo-split-terminal');
+    if (panel) panel.scrollTop = panel.scrollHeight;
+  };
+
+  (async () => {
+    await delay(400);
+    append('Resolving network topology...', 'var(--green)');
+    await delay(600);
+    append('');
+    append('<span style="color:var(--cyan);letter-spacing:2px">CORP IDENTITY NETWORK MAP</span>', 'var(--cyan)');
+    await delay(300);
+    append('');
+    const topo = [
+      '  ┌─────────────────────────────────────────────┐',
+      '  │         CORPORATE IDENTITY FABRIC            │',
+      '  └────────────────┬───────────────────────────┘',
+      '                   │',
+      '         ┌─────────▼─────────┐',
+      '         │  PointSail IGA    │  ← Identity Warehouse',
+      '         │  (Governance Hub) │    SCIM 2.0 / REST API',
+      '         └──┬─────────────┬──┘',
+      '            │             │',
+      '   ┌────────▼──┐    ┌────▼────────┐',
+      '   │ Active    │    │  Azure AD   │  ← Cloud IdP',
+      '   │ Directory │    │  (Entra ID) │    SAML / OIDC',
+      '   └──────┬────┘    └──────┬──────┘',
+      '          │                │',
+      '   ┌──────▼────────────────▼──────┐',
+      '   │        SSO / Federation       │',
+      '   │   Okta ·  ADFS ·  Ping       │',
+      '   └──────┬───────────┬───────────┘',
+      '          │           │',
+      '   ┌──────▼──┐  ┌────▼───────┐',
+      '   │  SaaS   │  │  On-Prem   │',
+      '   │ Apps    │  │ Resources  │',
+      '   │ (300+)  │  │ (LDAP/Kerb)│',
+      '   └─────────┘  └────────────┘',
+    ];
+    for (const line of topo) {
+      append(line, 'var(--green-dim)');
+      await delay(55);
+    }
+    await delay(400);
+    append('');
+    append('Scanning privileged access paths...', 'var(--green)');
+    await delay(500);
+    const paths = [
+      { host:'10.0.1.15', svc:'CyberArk Vault',    status:'OPEN',   note:'PAM — credential brokering active' },
+      { host:'10.0.1.22', svc:'SailPoint IIQ',      status:'OPEN',   note:'IGA engine — cert campaigns running' },
+      { host:'10.0.2.8',  svc:'Azure AD Connect',   status:'OPEN',   note:'Sync agent — last heartbeat 42s ago' },
+      { host:'10.0.3.44', svc:'Splunk SIEM',         status:'OPEN',   note:'Log ingestion — 48k events/hr' },
+      { host:'10.0.4.17', svc:'Okta SSO Gateway',   status:'OPEN',   note:'Federation — SAML assertions active' },
+      { host:'10.0.5.9',  svc:'PAM Jump Server',    status: suSession?.accessLevel === 'limited' ? 'BLOCKED' : 'OPEN', note: suSession?.accessLevel === 'limited' ? 'Policy DENY — insufficient access level' : 'Privileged session broker' },
+    ];
+    append('');
+    append('HOST            SERVICE               STATUS    NOTE', '#555');
+    append('────────────────────────────────────────────────────────────────', '#333');
+    for (const p of paths) {
+      const sc = p.status === 'BLOCKED' ? 'var(--red)' : 'var(--green)';
+      await delay(180);
+      append(`${p.host.padEnd(16)}${p.svc.padEnd(22)}<span style="color:${sc}">${p.status.padEnd(10)}</span>${p.note}`, 'var(--green-dim)');
+    }
+    await delay(500);
+    append('');
+    append('Threat surface analysis...', 'var(--green)');
+    await delay(600);
+    const risk = suSession?.score >= 70 ? 'HIGH' : suSession?.score >= 40 ? 'MEDIUM' : 'LOW';
+    const riskColor = risk === 'HIGH' ? 'var(--red)' : risk === 'MEDIUM' ? 'var(--amber)' : 'var(--green)';
+    append(`  Identity risk score:    <span style="color:${riskColor}">${suSession?.score || 12}/100 (${risk})</span>`, 'var(--green-dim)');
+    append(`  Active entitlements:    <span style="color:var(--cyan)">${(suSession?.access||['terminal','ssh']).length}</span>`, 'var(--green-dim)');
+    append(`  SoD violations:         <span style="color:${(suSession?.violations||[]).length > 0 ? 'var(--red)' : 'var(--green)'}">${(suSession?.violations||[]).length}</span>`, 'var(--green-dim)');
+    append(`  Privileged paths:       <span style="color:var(--cyan)">6</span> reachable`, 'var(--green-dim)');
+    await delay(400);
+    append('');
+    append(`Scan complete — context: <span style="color:var(--cyan)">${target}</span> · <span style="color:#555">${ts()}</span>`, 'var(--green)');
+  })();
+}
+
+function cmdShowHistory() {
+  if (!cmdHistory || cmdHistory.length === 0) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">history</div><div style="color:#555;font-size:12px;">No commands in session history yet.</div></div>`);
+    return;
+  }
+  const rows = [...cmdHistory].reverse().map((cmd, i) =>
+    `<div style="display:flex;gap:12px;padding:3px 0;font-size:12px;border-bottom:1px solid rgba(0,255,65,0.04)">
+       <span style="color:#444;min-width:28px;text-align:right">${cmdHistory.length - i}</span>
+       <span style="color:var(--green-dim);cursor:pointer" onclick="runCmd(this.dataset.cmd)" data-cmd="${cmd.replace(/"/g,'&quot;')}"> ${cmd}</span>
+     </div>`
+  ).join('');
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">history</div>
+      <div class="info-box" data-label="SESSION HISTORY — ${cmdHistory.length} COMMAND${cmdHistory.length !== 1 ? 'S' : ''}">
+        ${rows}
+        <div style="margin-top:8px;font-size:10px;color:#444">Click any command to re-run it</div>
+      </div>
+    </div>
+  `);
+}
+
+function cmdVerifyCert(args) {
+  const certId = args[0];
+  if (!certId) {
+    const ids = DATA.certs.map(c => `<span style="color:var(--cyan);cursor:pointer" onclick="runCmd('verify-cert ${c.id}')">${c.id}</span>`).join(' · ');
+    addOutput(`<div class="output-block"><div class="cmd-echo">verify-cert</div><div style="color:var(--amber);font-size:12px;margin-bottom:6px">Usage: verify-cert &lt;cert-id&gt;</div><div style="font-size:11px;color:#555">Known IDs: ${ids}</div></div>`);
+    return;
+  }
+  const cert = DATA.certs.find(c => c.id.toLowerCase() === certId.toLowerCase());
+  if (!cert) {
+    addOutput(`<div class="output-block"><div class="cmd-echo">verify-cert ${certId}</div><div class="access-denied"><div class="denied-text">⚠ CERT NOT FOUND</div><div style="color:var(--red);font-size:12px">Certificate ID "${certId}" not on record. Run view-certifications to list valid IDs.</div></div></div>`);
+    return;
+  }
+
+  // Animate the verification
+  const boxId = 'vcert-' + Date.now();
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">verify-cert ${certId}</div>
+      <div class="info-box" data-label="CERTIFICATE VERIFICATION" id="${boxId}" style="font-size:12px;font-family:'Share Tech Mono',monospace">
+        <div>Querying certificate authority... <span id="${boxId}-spin" style="color:var(--amber)">⠋</span></div>
+      </div>
+    </div>
+  `);
+
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  let f = 0;
+  const spinEl = document.getElementById(`${boxId}-spin`);
+  const interval = setInterval(() => {
+    if (spinEl) spinEl.textContent = frames[f++ % frames.length];
+  }, 80);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="font-size:22px;color:var(--green);text-shadow:0 0 12px var(--green)">✓</div>
+        <div>
+          <div style="color:var(--green);font-family:'Orbitron',monospace;font-size:12px;letter-spacing:1px">VERIFIED — CERTIFICATE AUTHENTIC</div>
+          <div style="color:#555;font-size:10px;margin-top:2px">Signature valid · CA chain intact · Not revoked</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:11px;margin-bottom:10px">
+        <div style="color:#555">CERTIFICATE</div><div style="color:var(--cyan)">${cert.name}</div>
+        <div style="color:#555">ISSUING BODY</div><div style="color:var(--green-dim)">${cert.org}</div>
+        <div style="color:#555">ISSUED</div><div style="color:var(--green-dim)">${cert.year}</div>
+        <div style="color:#555">CERT ID</div><div style="color:var(--green-dim)">${cert.id}</div>
+        <div style="color:#555">STATUS</div><div style="color:var(--green)">ACTIVE</div>
+        <div style="color:#555">VERIFIED AT</div><div style="color:#666">${new Date().toLocaleTimeString()} · ${new Date().toLocaleDateString()}</div>
+      </div>
+      <div style="padding:7px 10px;background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.15);border-radius:4px;font-size:10px;color:#555">
+        Verification logged to audit trail · cert-ca.iam-portfolio.internal
+      </div>
+    `;
+    const panel = document.getElementById('demo-split-terminal');
+    if (panel) panel.scrollTop = panel.scrollHeight;
+  }, 1800);
+}
+
+function _suEject(reason) {
+  if (!suSession) return;
+  const name = suSession.name;
+  const id = suSession.id;
+  _suClearTTL();
+  suSession = null;
+  try { localStorage.removeItem('iam_terminal_session'); } catch(e) {}
+  document.getElementById('prompt-text').textContent = 'SEC-PORT-01 [root]';
+  _updateAuthBadge();
+  addOutput(`
+    <div class="output-block">
+      <div class="info-box" data-label="⚠ SESSION TERMINATED — IAM POLICY ENFORCEMENT" style="border-color:var(--red)">
+        <div style="color:var(--red);font-family:'Orbitron',monospace;font-size:13px;margin-bottom:10px;letter-spacing:1px">SESSION FORCIBLY TERMINATED</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[SEC]</span> Identity: ${name} (${id})</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[IAM]</span> Reason: ${reason}</div>
+        <div class="log-line"><span class="ts">NOW</span><span class="level-warn">[AUD]</span> Ejection event logged to PointSail audit trail</div>
+        <div style="color:var(--red);font-size:11px;margin-top:10px;padding:8px;background:rgba(220,38,38,.08);border-radius:4px">Access revocation enforced in real-time by PointSail IAM engine. Returned to root session.</div>
+      </div>
+    </div>
+  `);
+}
+
+// Real-time revocation listener
+window.addEventListener('storage', function(e) {
+  if (!suSession) return;
+  if (e.key === 'ps_lab_v2') {
+    try {
+      const state = JSON.parse(e.newValue);
+      const identity = (state?.identities || []).find(i => i.id === suSession.id);
+      if (!identity) { _suEject('Identity removed from PointSail directory'); return; }
+      if (identity.status === 'Inactive') { _suEject('Account disabled by administrator in PointSail'); return; }
+      if (!(identity.access || []).includes('IAM Terminal')) { _suEject('IAM Terminal entitlement revoked by administrator'); return; }
+      // Refresh local suSession data silently
+      suSession = { ...identity, accessLevel: _suAccessLevel(identity) };
+      _updateAuthBadge();
+    } catch(err) {}
+  }
+  if (e.key === 'iam_terminal_session' && !e.newValue) {
+    _suEject('Session token invalidated by external process');
+  }
+});
+
+
+function deniedResponse(cmd) {
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">${cmd}</div>
+      <div class="access-denied">
+        <div class="denied-text">⛔ COMMAND NOT RECOGNIZED</div>
+        <div style="color:var(--red); font-size:12px; margin-bottom:6px;">"${cmd}": command not found</div>
+        <div style="color:#555; font-size:11px;">IAM POLICY: DENY — Reason: UnauthorizedCommand<br>Type "help" for available commands.</div>
+      </div>
+    </div>
+  `);
+}
+
+// Command dispatcher
+function dispatch(raw) {
+  const parts = raw.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1);
+
+  if (!cmd) return;
+
+  if (cmd !== 'history') cmdHistory.unshift(raw);
+  historyIndex = -1;
+
+  // While MFA is pending, treat any input as the code attempt
+  // (except 'demo' and 'demo-skip' which bypass auth and run their own flow)
+  if (!isAuthenticated && mfaCode && cmd !== 'demo' && cmd !== 'demo-skip') {
+    cmdVerify([raw.trim()]);
+    return;
+  }
+
+  if (cmd === 'verify') {
+    cmdVerify(args);
+    return;
+  }
+
+  if (COMMANDS[cmd]) {
+    COMMANDS[cmd](args);
+  } else {
+    deniedResponse(cmd);
+  }
+}
+
+// Tab autocomplete
+const ALL_CMDS = ['demo', 'demo-skip', 'whoami', 'skills', 'show-projects', 'project', 'view-certifications', 'contact', 'download-resume', 'pointsail-lab', 'su', 'su-exit', 'id', 'policy-check', 'audit', 'scan', 'history', 'help', 'clear', 'status', 'ls', 'cat', 'snake', 'exit', 'sudo', 'toggle-crt'];
+
+document.getElementById('cmd-input').addEventListener('keydown', (e) => {
+  const input = document.getElementById('cmd-input');
+
+  if (e.key === 'Enter') {
+    const val = input.value;
+    if (val.trim()) dispatch(val);
+    input.value = '';
+    historyIndex = -1;
+  }
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (historyIndex < cmdHistory.length - 1) {
+      historyIndex++;
+      input.value = cmdHistory[historyIndex];
+    }
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIndex > 0) {
+      historyIndex--;
+      input.value = cmdHistory[historyIndex];
+    } else {
+      historyIndex = -1;
+      input.value = '';
+    }
+  }
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const val = input.value.toLowerCase();
+    const match = ALL_CMDS.find(c => c.startsWith(val));
+    if (match) input.value = match;
+  }
+
+  if (e.key === 'Escape') {
+    closeResumePreview();
+  }
+
+  // Block input handler when snake game is active
+  if (document.getElementById('snake-modal').classList.contains('active')) {
+    e.preventDefault();
+    return;
+  }
+});
+
+// ─── SNAKE GAME ────────────────────────────────────────────────────────────
+let snakeState = null;
+let snakeBest  = 0;
+
+function openSnakeGame() {
+  document.getElementById('snake-modal').classList.add('active');
+  document.getElementById('cmd-input').blur();
+  initSnake();
+}
+
+function closeSnakeGame() {
+  document.getElementById('snake-modal').classList.remove('active');
+  if (snakeState) { clearInterval(snakeState.timer); snakeState = null; }
+  document.getElementById('cmd-input').focus();
+}
+
+function initSnake() {
+  const canvas = document.getElementById('snake-canvas');
+  const ctx    = canvas.getContext('2d');
+  const COLS = 30, ROWS = 24, CELL = 16;
+
+  if (snakeState && snakeState.timer) clearInterval(snakeState.timer);
+
+  snakeState = {
+    snake:   [{x:15,y:12},{x:14,y:12},{x:13,y:12}],
+    dir:     {x:1, y:0},
+    nextDir: {x:1, y:0},
+    food:    null,
+    score:   0,
+    speed:   145,
+    paused:  false,
+    over:    false,
+    timer:   null
+  };
+
+  document.getElementById('snake-score').textContent = '0';
+  document.getElementById('snake-hi').textContent    = snakeBest;
+
+  function spawnFood() {
+    let p;
+    do { p = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)}; }
+    while (snakeState.snake.some(s => s.x===p.x && s.y===p.y));
+    snakeState.food = p;
+  }
+  spawnFood();
+
+  function draw() {
+    const st = snakeState;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle grid dots
+    ctx.fillStyle = 'rgba(0,255,65,0.05)';
+    for (let c = 0; c < COLS; c++)
+      for (let r = 0; r < ROWS; r++)
+        ctx.fillRect(c*CELL+CELL/2-1, r*CELL+CELL/2-1, 2, 2);
+
+    // Food
+    if (st.food) {
+      ctx.fillStyle = '#ffaa00';
+      ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 10;
+      ctx.fillRect(st.food.x*CELL+3, st.food.y*CELL+3, CELL-6, CELL-6);
+      ctx.shadowBlur = 0;
+    }
+
+    // Snake
+    st.snake.forEach((seg, i) => {
+      if (i === 0) {
+        ctx.fillStyle = '#00ff41';
+        ctx.shadowColor = '#00ff41'; ctx.shadowBlur = 10;
+        ctx.fillRect(seg.x*CELL+1, seg.y*CELL+1, CELL-2, CELL-2);
+        ctx.shadowBlur = 0;
+      } else {
+        const t = Math.max(0.12, 1 - i / (st.snake.length + 1));
+        ctx.fillStyle = `rgba(0,${Math.floor(55+130*t)},0,${0.2+0.8*t})`;
+        ctx.fillRect(seg.x*CELL+2, seg.y*CELL+2, CELL-4, CELL-4);
+      }
+    });
+
+    // Game Over overlay
+    if (st.over) {
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ff3355'; ctx.shadowColor = '#ff3355'; ctx.shadowBlur = 14;
+      ctx.font = 'bold 20px "Orbitron",monospace';
+      ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 22);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#00ff41';
+      ctx.font = '13px "Share Tech Mono",monospace';
+      ctx.fillText('SCORE: ' + st.score, canvas.width/2, canvas.height/2 + 8);
+      ctx.fillStyle = '#555';
+      ctx.fillText('[ R ] RESTART   [ ESC ] EXIT', canvas.width/2, canvas.height/2 + 30);
+      ctx.textAlign = 'left';
+    } else if (st.paused) {
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffaa00'; ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 10;
+      ctx.font = 'bold 16px "Orbitron",monospace';
+      ctx.fillText('PAUSED', canvas.width/2, canvas.height/2 - 8);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#555';
+      ctx.font = '12px "Share Tech Mono",monospace';
+      ctx.fillText('[ P ] RESUME', canvas.width/2, canvas.height/2 + 16);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function step() {
+    const st = snakeState;
+    if (!st || st.paused || st.over) return;
+    st.dir = st.nextDir;
+    const head = {x: st.snake[0].x + st.dir.x, y: st.snake[0].y + st.dir.y};
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS
+        || st.snake.some(s => s.x===head.x && s.y===head.y)) {
+      st.over = true; clearInterval(st.timer); draw(); return;
+    }
+    st.snake.unshift(head);
+    if (head.x === st.food.x && head.y === st.food.y) {
+      st.score += 10;
+      document.getElementById('snake-score').textContent = st.score;
+      if (st.score > snakeBest) {
+        snakeBest = st.score;
+        document.getElementById('snake-hi').textContent = snakeBest;
+      }
+      spawnFood();
+      if (st.score % 50 === 0 && st.speed > 65) {
+        clearInterval(st.timer);
+        st.speed = Math.max(65, st.speed - 12);
+        st.timer = setInterval(step, st.speed);
+      }
+    } else {
+      st.snake.pop();
+    }
+    draw();
+  }
+
+  snakeState.timer = setInterval(step, snakeState.speed);
+  draw();
+}
+
+// Snake keyboard controls (document-level, fires when input is blurred)
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('snake-modal').classList.contains('active') || !snakeState) return;
+  const st = snakeState;
+  switch (e.key) {
+    case 'ArrowUp':    e.preventDefault(); if (st.dir.y !==  1) st.nextDir={x:0,y:-1}; break;
+    case 'ArrowDown':  e.preventDefault(); if (st.dir.y !== -1) st.nextDir={x:0,y: 1}; break;
+    case 'ArrowLeft':  e.preventDefault(); if (st.dir.x !==  1) st.nextDir={x:-1,y:0}; break;
+    case 'ArrowRight': e.preventDefault(); if (st.dir.x !== -1) st.nextDir={x: 1,y:0}; break;
+    case 'p': case 'P': if (!st.over) st.paused = !st.paused; break;
+    case 'r': case 'R': initSnake(); break;
+    case 'Escape': closeSnakeGame(); break;
+  }
+});
+
+function cmdSnake() {
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">snake</div>
+      <div class="info-box" data-label="TERMINAL ARCADE">
+        <div class="log-line"><span class="level-ok">[SYS]</span> Loading snake.exe... <span style="color:var(--green);">OK</span></div>
+        <div class="log-line"><span class="level-ok">[SYS]</span> Allocating game buffer... <span style="color:var(--green);">OK</span></div>
+        <div style="color:var(--green-dim); font-size:12px; margin-top:8px;">
+          <span style="color:var(--green);">arrow keys</span> to move &nbsp;·&nbsp;
+          <span style="color:var(--green);">P</span> pause &nbsp;·&nbsp;
+          <span style="color:var(--green);">R</span> restart &nbsp;·&nbsp;
+          <span style="color:var(--green);">ESC</span> exit
+        </div>
+      </div>
+    </div>
+  `);
+  openSnakeGame();
+}
+
+// CRT toggle
+function toggleCRT() {
+  const off = document.body.classList.toggle('no-crt');
+  document.getElementById('crt-state').textContent = off ? 'OFF' : 'ON';
+  localStorage.setItem('crt', off ? 'off' : 'on');
+}
+
+function cmdToggleCRT() {
+  toggleCRT();
+  const isOff = document.body.classList.contains('no-crt');
+  addOutput(`
+    <div class="output-block">
+      <div class="cmd-echo">toggle-crt</div>
+      <div style="color:var(--green-dim); font-size:12px;">CRT scanline effect: <span style="color:${isOff ? 'var(--amber)' : 'var(--green)'};">${isOff ? 'OFF' : 'ON'}</span></div>
+    </div>
+  `);
+}
+
+// Restore CRT preference
+if (localStorage.getItem('crt') === 'off') {
+  document.body.classList.add('no-crt');
+  document.getElementById('crt-state').textContent = 'OFF';
+}
+
+// Keep focus (skip when snake game is open)
+document.addEventListener('click', () => {
+  if (!document.getElementById('snake-modal').classList.contains('active')) {
+    document.getElementById('cmd-input').focus();
+  }
+});
+
+// Init
+boot();
+
+// ── DEMO SPLIT VIEW ───────────────────────────────────────────────────────────
+// Rather than cloning/mirroring the output (which causes constant DOM churn and
+// visual glitching), we physically move the real #output and #input-row nodes
+// into the split panel. No interval, no copying — same DOM nodes, new parent.
+
+function _demoEnterSplit() {
+  // Build the wrapper once
+  let wrap = document.getElementById('demo-split-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'demo-split-wrap';
+    wrap.innerHTML = `
+      <div id="demo-split-terminal"></div>
+      <div id="demo-split-lab">
+        <div id="demo-split-lab-header">
+          <div class="live-dot"></div>
+          <span>POINTSAIL IDENTITY PLATFORM — LIVE</span>
+          <span style="margin-left:auto;cursor:pointer;color:rgba(255,255,255,0.25);font-size:11px" onclick="_demoExitSplit()">✕ exit split</span>
+        </div>
+        <iframe id="demo-split-iframe" src="pointsail-lab.html" title="PointSail Identity Platform"></iframe>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+  }
+
+  // Move the real output + input-row into the split terminal panel
+  const panel  = document.getElementById('demo-split-terminal');
+  const output = document.getElementById('output');
+  const inputRow = document.getElementById('input-row');
+  if (panel && output)   panel.appendChild(output);
+  if (panel && inputRow) panel.appendChild(inputRow);
+
+  // Scroll to bottom
+  if (panel) panel.scrollTop = panel.scrollHeight;
+
+  wrap.classList.add('active');
+  document.body.classList.add('demo-split');
+}
+
+function _demoExitSplit() {
+  const mainUi = document.getElementById('main-ui');
+  const output = document.getElementById('output');
+  const inputRow = document.getElementById('input-row');
+
+  // Move nodes back to their original parent (#main-ui)
+  if (mainUi && output)   mainUi.appendChild(output);
+  if (mainUi && inputRow) mainUi.appendChild(inputRow);
+
+  const wrap = document.getElementById('demo-split-wrap');
+  if (wrap) wrap.classList.remove('active');
+  document.body.classList.remove('demo-split');
+
+  // Restore scroll position to bottom
+  window.scrollTo(0, document.body.scrollHeight);
+}
+</script>
+</body>
+</html>
