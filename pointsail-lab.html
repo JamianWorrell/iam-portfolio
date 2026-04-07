@@ -33,7 +33,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px
 .env-pill{margin:8px 12px;padding:5px 10px;background:rgba(0,96,192,0.2);border:1px solid rgba(0,96,192,0.35);border-radius:4px;font-size:9px;color:rgba(255,255,255,0.5);text-align:center;letter-spacing:.6px;text-transform:uppercase}
 .nav-scroll{flex:1;overflow-y:auto;padding:4px 0 10px}
 .nav-section{padding:14px 14px 4px;font-size:9px;font-weight:600;color:rgba(255,255,255,0.22);letter-spacing:1.3px;text-transform:uppercase}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 14px 8px 16px;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,0.58);border-left:3px solid transparent;transition:all .12s;position:relative;user-select:none}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 14px 8px 16px;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,0.58);border-left:3px solid transparent;transition:all .12s;position:relative;user-select:none;white-space:nowrap;overflow:hidden}
 .nav-item:hover{background:rgba(255,255,255,0.055);color:rgba(255,255,255,0.85)}
 .nav-item.active{background:rgba(0,96,192,0.28);color:#fff;border-left-color:#4A9FFF}
 .nav-item .ni{width:14px;height:14px;flex-shrink:0;opacity:.6}
@@ -94,7 +94,7 @@ body.in-iframe #demo-guide-bar{display:none!important}
 .topbar-info{flex:1;min-width:0}
 .topbar-title{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topbar-bc{font-size:10.5px;color:var(--muted);margin-top:1px}
-.topbar-actions{display:flex;gap:7px;align-items:center;flex-shrink:0}
+.topbar-actions{display:flex;gap:7px;align-items:center;flex-shrink:0;white-space:nowrap}
 .status-dot{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}
 .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .dot-g{background:#22C55E}.dot-a{background:#F59E0B}.dot-r{background:#EF4444}
@@ -197,7 +197,7 @@ tbody tr:hover td{background:#FAFBFF}
 .link:hover{text-decoration:underline}
 
 /* ── DETAIL PANEL ───────────────────────────────────── */
-#detail-panel{position:absolute;right:0;top:0;bottom:0;width:370px;background:var(--surf);border-left:1px solid var(--border);overflow-y:auto;padding:20px;z-index:30;transform:translateX(100%);transition:transform .22s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.08)}
+#detail-panel{position:absolute;right:0;top:0;bottom:0;width:min(370px,95vw);background:var(--surf);border-left:1px solid var(--border);overflow-y:auto;padding:20px;z-index:30;transform:translateX(100%);transition:transform .22s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.08)}
 #detail-panel.open{transform:translateX(0)}
 .dp-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
 .dp-avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0}
@@ -213,7 +213,7 @@ tbody tr:hover td{background:#FAFBFF}
 /* ── MODAL ──────────────────────────────────────────── */
 #modal-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:60;align-items:flex-start;justify-content:center;padding-top:60px}
 #modal-overlay.open{display:flex}
-.modal{background:var(--surf);border-radius:10px;width:480px;max-height:600px;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
+.modal{background:var(--surf);border-radius:10px;width:min(480px,92vw);max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
 .form-group{margin-bottom:13px}
 .form-label{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.3px}
@@ -629,7 +629,7 @@ textarea.form-control{resize:vertical;min-height:70px}
       <div class="topbar-bc" id="pg-bc">Lab → Scenarios</div>
     </div>
     <div class="topbar-actions">
-      <div id="sso-badge" style="display:none;align-items:center;gap:5px;padding:3px 9px;background:#E5F0FA;border:1px solid #B8D4F0;border-radius:4px;font-size:10px;color:#0060C0;font-weight:500;">
+      <div id="sso-badge" style="display:none;align-items:center;gap:5px;padding:3px 9px;background:#E5F0FA;border:1px solid #B8D4F0;border-radius:4px;font-size:10px;color:#0060C0;font-weight:500;white-space:nowrap;flex-shrink:0;">
         <div class="dot dot-g"></div>SSO · Portfolio
       </div>
       <div class="status-dot"><div class="dot dot-g"></div>All Sources Live</div>
@@ -1866,129 +1866,17 @@ function renderReports() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// DETAIL PANEL
+// DETAIL PANEL — implemented via window.openDetailPanel below
 // ═══════════════════════════════════════════════════════════
-function openDetailPanel(id) {
-  const i = IDENTITIES.find(x=>x.id===id);
-  if (!i) return;
-  const avatarColors = ['#0060C0','#DC2626','#D97706','#7C3AED','#059669'];
-  const col = i.score>=70?'#DC2626':i.score>=40?'#D97706':'#0060C0';
-  const av = document.getElementById('dp-avatar');
-  av.textContent = i.name.split(' ').map(n=>n[0]).join('').substring(0,2);
-  av.style.background = col;
-  document.getElementById('dp-name').textContent = i.name;
-  document.getElementById('dp-jobtitle').textContent = i.title;
-  const st = document.getElementById('dp-status');
-  st.textContent = i.status;
-  st.className = 'badge '+(i.status==='Active'?'badge-green':'badge-gray');
-  document.getElementById('dp-email').textContent = i.email;
-  document.getElementById('dp-empid').textContent = i.empid;
-  document.getElementById('dp-dept').textContent = i.dept;
-  document.getElementById('dp-mgr').textContent = i.mgr;
-  document.getElementById('dp-loc').textContent = i.loc;
-  document.getElementById('dp-start').textContent = i.start;
-  const riskEl = document.getElementById('dp-risk');
-  riskEl.textContent = i.risk+' ('+i.score+')';
-  riskEl.style.color = i.score>=70?'var(--red)':i.score>=40?'var(--amber)':'var(--green)';
-  document.getElementById('dp-source').textContent = i.source;
-  document.getElementById('dp-login').textContent = i.login;
-  document.getElementById('dp-cert').textContent = i.score>=70?'Overdue':'Q3 2025';
-  document.getElementById('dp-acc-count').textContent = i.access.length;
-  // Entitlements with metadata — source, assignment type, last certified
-  const privKeywords = ['Admin','Full Access','Owner','Super','CyberArk','Splunk','Global','Root'];
-  const isPriv = a => privKeywords.some(k => a.includes(k));
-  const sourceFor = a => {
-    if (/CN=|AD|Active Dir/i.test(a)) return 'Active Directory';
-    if (/Salesforce/i.test(a)) return 'Salesforce';
-    if (/AWS|EC2|S3/i.test(a)) return 'AWS IAM';
-    if (/Azure|Entra/i.test(a)) return 'Azure AD';
-    if (/GitHub/i.test(a)) return 'GitHub';
-    if (/Okta/i.test(a)) return 'Okta';
-    if (/SAP/i.test(a)) return 'SAP ERP';
-    if (/Jira|Confluence/i.test(a)) return 'Atlassian';
-    if (/Workday/i.test(a)) return 'Workday';
-    return i.source || 'Direct';
-  };
-  const certDate = () => {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const d = new Date(); d.setMonth(d.getMonth()-Math.floor(Math.random()*6));
-    return months[d.getMonth()]+' '+d.getFullYear();
-  };
-  document.getElementById('dp-entitlements').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-      <thead><tr style="border-bottom:1px solid var(--border)">
-        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ENTITLEMENT</th>
-        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">SOURCE</th>
-        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">TYPE</th>
-        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">CERTIFIED</th>
-        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ACTION</th>
-      </tr></thead>
-      <tbody>${(i.access||[]).filter(a=>a!=='IAM Terminal').map(a=>`
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:6px 8px">
-            <span style="font-weight:500">${a}</span>
-            ${isPriv(a)?'<span style="margin-left:5px;font-size:9px;padding:1px 5px;background:var(--red-lt);color:var(--red);border-radius:3px;font-weight:600">PRIV</span>':''}
-          </td>
-          <td style="padding:6px 8px;color:var(--muted)">${sourceFor(a)}</td>
-          <td style="padding:6px 8px"><span style="font-size:10px;padding:1px 6px;background:var(--blue-lt);color:var(--blue);border-radius:3px">${isPriv(a)?'Direct':'Role-based'}</span></td>
-          <td style="padding:6px 8px;color:var(--muted)">${certDate()}</td>
-          <td style="padding:6px 8px"><span class="link" style="color:var(--red);font-size:11px" onclick="dpRevokeEntitlement('${i.id}','${a.replace(/'/g,"\\'")}')">Revoke</span></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  const vs = document.getElementById('dp-violations-section');
-  if (i.violations.length) {
-    vs.style.display='block';
-    document.getElementById('dp-violations').innerHTML = i.violations.map(v=>`<div style="font-size:11px;padding:5px 8px;background:var(--red-lt);border-radius:4px;color:var(--red);margin-bottom:5px;line-height:1.4;border-left:3px solid var(--red)">${v}</div>`).join('');
-  } else vs.style.display='none';
-  const hist = document.getElementById('dp-history');
-  hist.innerHTML = (i.history||[]).map(h=>`<div class="tl-item"><div class="tl-dot" style="background:var(--blue)"></div><div class="tl-date">${h.t}</div><div class="tl-content"><strong>${h.e}</strong> — ${h.d}</div></div>`).join('') || '<div style="color:var(--muted2);font-size:11px">No history available</div>';
-  document.getElementById('detail-panel').classList.add('open');
-}
 function closeDetailPanel() { document.getElementById('detail-panel').classList.remove('open'); }
 
 // ═══════════════════════════════════════════════════════════
 // MODAL
 // ═══════════════════════════════════════════════════════════
-const MODAL_DEFS = {
-  identity:{title:'Create New Identity',submit:'Create Identity',msg:'Identity created — joiner lifecycle event triggered',body:`
-    <div class="form-group"><label class="form-label">Full Name</label><input class="form-control" placeholder="First Last"></div>
-    <div class="form-group"><label class="form-label">Work Email</label><input class="form-control" type="email" placeholder="firstname.last@acme.com"></div>
-    <div class="form-group"><label class="form-label">Job Title</label><input class="form-control" placeholder="Software Engineer"></div>
-    <div class="form-group"><label class="form-label">Department</label><select class="form-control"><option>Engineering</option><option>Finance</option><option>Sales</option><option>Human Resources</option><option>IT Operations</option><option>Marketing</option><option>Legal & Compliance</option><option>Contractors</option></select></div>
-    <div class="form-group"><label class="form-label">Manager</label><input class="form-control" placeholder="Manager username or email"></div>
-    <div class="form-group"><label class="form-label">Authoritative Source</label><select class="form-control"><option>Workday</option><option>Active Directory</option><option>Manual</option></select></div>
-    <div class="form-group"><label class="form-label">Initial Role</label><select class="form-control"><option>Standard User</option><option>IT Administrator</option><option>Finance User</option><option>Developer Standard</option><option>HR Viewer</option><option>Contractor Basic</option></select></div>
-    <div class="form-group"><label class="form-label">Start Date</label><input class="form-control" type="date"></div>`},
-  request:{title:'Submit Access Request',submit:'Submit Request',msg:'Access request submitted — approval workflow started',body:`
-    <div class="form-group"><label class="form-label">Requester Identity</label><input class="form-control" placeholder="Search identity username…"></div>
-    <div class="form-group"><label class="form-label">Access Item Requested</label><select class="form-control"><option>Salesforce Admin</option><option>AWS S3 Write</option><option>GitHub Org Admin</option><option>Finance Reports Write</option><option>Azure AD Global Admin</option><option>SAP Finance Full</option><option>ServiceNow Admin</option></select></div>
-    <div class="form-group"><label class="form-label">Application / Source</label><select class="form-control"><option>Salesforce</option><option>AWS IAM</option><option>GitHub Enterprise</option><option>SAP ERP</option><option>Azure Active Directory</option></select></div>
-    <div class="form-group"><label class="form-label">Business Justification</label><textarea class="form-control" placeholder="Describe why this access is required for the role and business need…"></textarea></div>
-    <div class="form-group"><label class="form-label">Priority</label><select class="form-control"><option>Standard</option><option>High</option><option>Urgent</option></select></div>
-    <div class="form-group"><label class="form-label">Duration</label><select class="form-control"><option>Permanent</option><option>90 days</option><option>30 days</option><option>Project-based</option></select></div>`},
-  role:{title:'Create Role',submit:'Save Role',msg:'Role created successfully',body:`
-    <div class="form-group"><label class="form-label">Role Name</label><input class="form-control" placeholder="e.g. Finance Analyst"></div>
-    <div class="form-group"><label class="form-label">Role Type</label><select class="form-control"><option>Business</option><option>IT</option><option>Privileged</option><option>Technical</option></select></div>
-    <div class="form-group"><label class="form-label">Owner / Team</label><input class="form-control" placeholder="Team or person responsible"></div>
-    <div class="form-group"><label class="form-label">Description</label><textarea class="form-control" placeholder="Purpose and scope of this role…"></textarea></div>
-    <div class="form-group"><label class="form-label">Entitlements (comma-separated)</label><input class="form-control" placeholder="SAP Finance Read, Oracle ERP, SharePoint…"></div>
-    <div class="form-group"><label class="form-label">SoD Policies to Enforce</label><select class="form-control"><option>Finance-IT SoD</option><option>Privileged Access Limit</option><option>None</option></select></div>`},
-};
-let activeModal = '';
-function openModal(type) {
-  activeModal = type;
-  const d = MODAL_DEFS[type]; if (!d) return;
-  document.getElementById('modal-title').childNodes[0].nodeValue = d.title + '  ';
-  document.getElementById('modal-body').innerHTML = d.body||'';
-  document.getElementById('modal-overlay').classList.add('open');
-}
+// openModal / modalSubmit are implemented via window overrides below
+function openModal(type) {}  // stub — overridden by window.openModal
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
-function modalSubmit() {
-  const d = MODAL_DEFS[activeModal];
-  closeModal();
-  if (d && d.msg) toast(d.msg);
-}
+function modalSubmit() {}    // stub — overridden by window.modalSubmit
 
 // ═══════════════════════════════════════════════════════════
 // TOAST
@@ -2886,8 +2774,10 @@ function dpRemoveEntitlement(identityId, entitlement, btn) {
 }
 
 function dpRequestAccess() {
-  if (_dpCurrentId) { document.getElementById('fr-who') ? null : null; openModal('request'); setTimeout(() => { const el = document.getElementById('fr-who'); if(el) el.value = _dpCurrentId; }, 50); }
-  else openModal('request');
+  openModal('request');
+  if (_dpCurrentId) {
+    setTimeout(() => { const el = document.getElementById('fr-who'); if (el) el.value = _dpCurrentId; }, 80);
+  }
 }
 function dpRevokeAll() {
   if (!_dpCurrentId) return;
