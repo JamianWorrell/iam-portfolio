@@ -686,29 +686,30 @@
   #demo-split-terminal {
     width: 50%;
     height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     border-right: 1px solid rgba(0,255,65,0.15);
     display: flex;
     flex-direction: column;
     position: relative;
   }
 
-  /* When #output is reparented into the split panel it needs padding */
+  /* Output scrolls independently — fills all space above the input row */
   #demo-split-terminal #output {
     flex: 1;
-    padding: 16px 20px 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 20px 8px;
     min-height: 0;
   }
 
-  /* input row at the bottom of split panel */
+  /* Input row always pinned to the very bottom — never moves */
   #demo-split-terminal #input-row {
-    position: sticky;
-    bottom: 0;
+    position: relative;
+    flex-shrink: 0;
     background: #000;
     border-top: 1px solid rgba(0,255,65,0.12);
     padding: 10px 20px;
-    flex-shrink: 0;
+    margin-top: 0;
   }
 
   #demo-split-lab {
@@ -1502,13 +1503,13 @@ function addOutput(html) {
   const div = document.createElement('div');
   div.innerHTML = html;
   out.appendChild(div);
-  // In split mode the output lives inside the scrollable split panel
+  // In split mode #output is its own scroll container — scroll it directly
   if (document.body.classList.contains('demo-split')) {
-    const panel = document.getElementById('demo-split-terminal');
-    if (panel) panel.scrollTop = panel.scrollHeight;
-  } else {
     out.scrollTop = out.scrollHeight;
+    requestAnimationFrame(() => { out.scrollTop = out.scrollHeight; });
+  } else {
     window.scrollTo(0, document.body.scrollHeight);
+    requestAnimationFrame(() => { window.scrollTo(0, document.body.scrollHeight); });
   }
 }
 
@@ -2224,24 +2225,63 @@ function cmdCat(args) {
 // ── DEMO MODE ─────────────────────────────────────────────────────────────────
 let _demoRunning = false;
 let _demoTimers  = [];
+let _demoScrollInterval = null;
+
+function _demoStartScrollLock() {
+  // Runs every 120ms for the entire demo — keeps the terminal pinned to the
+  // bottom no matter what content is added or how long delays are.
+  // In split mode: scrolls #output (the actual scroll container).
+  // Before split opens: scrolls the window.
+  _demoScrollInterval = setInterval(() => {
+    if (document.body.classList.contains('demo-split')) {
+      const out = document.getElementById('output');
+      if (out) out.scrollTop = out.scrollHeight;
+    } else {
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+  }, 120);
+}
+
+function _demoStopScrollLock() {
+  if (_demoScrollInterval) { clearInterval(_demoScrollInterval); _demoScrollInterval = null; }
+}
 
 function _demoDelay(ms) {
   return new Promise(res => { const t = setTimeout(res, ms); _demoTimers.push(t); });
+}
+
+function _demoScrollToBottom() {
+  const out = document.getElementById('output');
+  if (document.body.classList.contains('demo-split')) {
+    if (out) out.scrollTop = out.scrollHeight;
+  } else {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
 }
 
 function _demoTypeCmd(text) {
   return new Promise(res => {
     const input = document.getElementById('cmd-input');
     input.value = '';
+    // Scroll so the input row is visible before typing starts
+    _demoScrollToBottom();
     let i = 0;
     const type = () => {
       if (!_demoRunning) { res(); return; }
       if (i < text.length) {
         input.value += text[i++];
+        // Keep scrolled to bottom on every keystroke so typing is always visible
+        _demoScrollToBottom();
         const t = setTimeout(type, 50 + Math.random() * 50);
         _demoTimers.push(t);
       } else {
-        const t = setTimeout(() => { dispatch(text); input.value = ''; res(); }, 380);
+        const t = setTimeout(() => {
+          dispatch(text);
+          input.value = '';
+          // Scroll again after command output is added
+          _demoScrollToBottom();
+          res();
+        }, 380);
         _demoTimers.push(t);
       }
     };
@@ -2307,6 +2347,7 @@ async function cmdDemo() {
   }
   _demoRunning = true;
   _demoTimers  = [];
+  _demoStartScrollLock();
 
   // Clean up any leftover su session from a previous run
   if (suSession) { suSession = null; try { localStorage.removeItem('iam_terminal_session'); } catch(e) {} }
@@ -2582,6 +2623,7 @@ async function cmdDemo() {
   `);
 
   _demoRunning = false;
+  _demoStopScrollLock();
 }
 
 function cmdDemoSkip() {
@@ -2592,6 +2634,7 @@ function cmdDemoSkip() {
   _demoTimers.forEach(t => clearTimeout(t));
   _demoTimers = [];
   _demoRunning = false;
+  _demoStopScrollLock();
   _demoHideSkipBar();
   _demoExitSplit();
   if (suSession) {
@@ -3541,11 +3584,14 @@ function _demoEnterSplit() {
   if (panel && output)   panel.appendChild(output);
   if (panel && inputRow) panel.appendChild(inputRow);
 
-  // Scroll to bottom
-  if (panel) panel.scrollTop = panel.scrollHeight;
-
   wrap.classList.add('active');
   document.body.classList.add('demo-split');
+
+  // Scroll #output to bottom after paint — input row is always at bottom via flex
+  requestAnimationFrame(() => {
+    const out = document.getElementById('output');
+    if (out) out.scrollTop = out.scrollHeight;
+  });
 }
 
 function _demoExitSplit() {

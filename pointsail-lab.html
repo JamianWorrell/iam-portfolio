@@ -697,14 +697,9 @@ textarea.form-control{resize:vertical;min-height:70px}
             </div>
           </div>
           <div class="card" style="margin-bottom:14px">
-            <div class="card-header"><div class="card-title">Recent Activity</div></div>
-            <div class="timeline">
-              <div class="tl-item"><div class="tl-dot dot-g"></div><div class="tl-date">2 min ago</div><div class="tl-content"><strong>Access Granted</strong> — sarah.chen → Salesforce Admin</div></div>
-              <div class="tl-item"><div class="tl-dot" style="background:var(--blue)"></div><div class="tl-date">18 min ago</div><div class="tl-content"><strong>Role Assigned</strong> — mike.torres → Finance User</div></div>
-              <div class="tl-item"><div class="tl-dot dot-r"></div><div class="tl-date">1 hr ago</div><div class="tl-content"><strong>SoD Violation</strong> — james.white (Finance-IT SoD)</div></div>
-              <div class="tl-item"><div class="tl-dot dot-a"></div><div class="tl-date">2 hr ago</div><div class="tl-content"><strong>Cert Overdue</strong> — Privileged Access Audit at 28%</div></div>
-              <div class="tl-item"><div class="tl-dot dot-r"></div><div class="tl-date">3 hr ago</div><div class="tl-content"><strong>Account Disabled</strong> — old.contractor (120d inactive)</div></div>
-              <div class="tl-item"><div class="tl-dot" style="background:var(--purple)"></div><div class="tl-date">4 hr ago</div><div class="tl-content"><strong>New Hire</strong> — new.hire_049 (Joiner event triggered)</div></div>
+            <div class="card-header"><div class="card-title">Recent Activity</div><span style="font-size:10px;color:var(--muted2);font-family:'Share Tech Mono',monospace" id="dash-activity-ts"></span></div>
+            <div class="timeline" id="dash-activity-feed">
+              <div class="tl-item"><div class="tl-dot dot-g"></div><div class="tl-date">—</div><div class="tl-content">Loading activity…</div></div>
             </div>
           </div>
           <div class="card" style="margin-bottom:14px">
@@ -752,12 +747,13 @@ textarea.form-control{resize:vertical;min-height:70px}
         <button class="btn btn-sm" onclick="toast('Exporting identity list to CSV…')">Export CSV</button>
       </div>
       <div class="filter-bar" id="id-filter-bar">
-        <button class="filter-btn active" onclick="setIDFilter('all',this)">All (8,412)</button>
-        <button class="filter-btn" onclick="setIDFilter('active',this)">Active (7,918)</button>
-        <button class="filter-btn" onclick="setIDFilter('inactive',this)">Inactive (421)</button>
-        <button class="filter-btn" onclick="setIDFilter('high',this)">High Risk (134)</button>
-        <button class="filter-btn" onclick="setIDFilter('orphan',this)">Orphan (54)</button>
-        <button class="filter-btn" onclick="setIDFilter('violation',this)">Has Violations (14)</button>
+        <button class="filter-btn active" id="idf-all"       onclick="setIDFilter('all',this)">All</button>
+        <button class="filter-btn"        id="idf-active"    onclick="setIDFilter('active',this)">Active</button>
+        <button class="filter-btn"        id="idf-inactive"  onclick="setIDFilter('inactive',this)">Inactive</button>
+        <button class="filter-btn"        id="idf-high"      onclick="setIDFilter('high',this)">High Risk</button>
+        <button class="filter-btn"        id="idf-orphan"    onclick="setIDFilter('orphan',this)">Orphan</button>
+        <button class="filter-btn"        id="idf-violation" onclick="setIDFilter('violation',this)">Has Violations</button>
+        <span id="id-result-count" style="margin-left:auto;font-size:11px;color:var(--muted2);align-self:center"></span>
       </div>
       <div class="tbl-wrap">
         <table><thead><tr><th></th><th>Name / Email</th><th>Title</th><th>Department</th><th>Manager</th><th>Risk Score</th><th>Source</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
@@ -1583,9 +1579,11 @@ function navigate(page, el) {
   closeDetailPanel();
   document.getElementById('pg-title').textContent = PAGE_TITLES[page]||page;
   document.getElementById('pg-bc').textContent = PAGE_BCS[page]||'';
-  if (page==='reports') renderReports();
-  if (page==='sources') renderSources();
+  if (page==='reports')         renderReports();
+  if (page==='sources')         renderSources();
   if (page==='sod-remediation') renderSoDFlow();
+  if (page==='dashboard')       updateDashboard();
+  if (page==='identities')      { renderIdentities(IDENTITIES); updateDashboard(); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1595,6 +1593,9 @@ function riskBadge(r) { return r==='High'||r==='Critical'?'badge-red':r==='Mediu
 function renderIdentities(list) {
   const tb = document.getElementById('id-tbody');
   if (!tb) return;
+  // Live result count
+  const countEl = document.getElementById('id-result-count');
+  if (countEl) countEl.textContent = `Showing ${list.length} of ${IDENTITIES.length} identities`;
   let activeSessUser = null;
   try { const s = JSON.parse(localStorage.getItem('iam_terminal_session')||'null'); if(s) activeSessUser = s.user; } catch(e){}
   tb.innerHTML = list.map(i=>{
@@ -1614,8 +1615,14 @@ function renderIdentities(list) {
   }).join('');
 }
 function filterIdentities(q) {
-  const ql = q.toLowerCase();
-  renderIdentities(IDENTITIES.filter(i=>i.name.toLowerCase().includes(ql)||i.email.toLowerCase().includes(ql)||i.dept.toLowerCase().includes(ql)||i.mgr.toLowerCase().includes(ql)||i.source.toLowerCase().includes(ql)));
+  const ql = q.toLowerCase().trim();
+  const results = ql ? IDENTITIES.filter(i=>
+    i.name.toLowerCase().includes(ql)||i.email.toLowerCase().includes(ql)||
+    i.id.toLowerCase().includes(ql)||i.dept.toLowerCase().includes(ql)||
+    i.mgr.toLowerCase().includes(ql)||i.source.toLowerCase().includes(ql)||
+    i.title.toLowerCase().includes(ql)
+  ) : IDENTITIES;
+  renderIdentities(results);
 }
 function setIDFilter(f, btn) {
   document.querySelectorAll('#id-filter-bar .filter-btn').forEach(b=>b.classList.remove('active'));
@@ -1645,12 +1652,45 @@ function renderRequests() {
     </tr>`).join('');
 }
 function approveRequest(idx, dec) {
-  REQUESTS[idx].status = dec==='approve'?'Approved':'Rejected';
-  document.getElementById('rs-'+idx).innerHTML = `<span class="badge ${dec==='approve'?'badge-green':'badge-red'}">${REQUESTS[idx].status}</span>`;
+  const req = REQUESTS[idx];
+  req.status = dec==='approve' ? 'Approved' : 'Rejected';
+  document.getElementById('rs-'+idx).innerHTML = `<span class="badge ${dec==='approve'?'badge-green':'badge-red'}">${req.status}</span>`;
   document.getElementById('ra-'+idx).innerHTML = '—';
-  if (dec==='approve') { reqCount--; const nb=document.getElementById('nb-req'); if(nb)nb.textContent=reqCount; markStep('S2','S2b'); }
-  else markStep('S2','S2c');
-  toast(dec==='approve'?'Request approved — provisioning plan generated':'Request rejected — requester notified');
+
+  if (dec === 'approve') {
+    // Execute provisioning — add the entitlement to the identity
+    const ident = IDENTITIES.find(i => i.id === req.who);
+    if (ident && req.access && !(ident.access||[]).includes(req.access)) {
+      ident.access = [...(ident.access||[]), req.access];
+      ident.history = [{t:'Now', e:'Access Granted', d:`${req.access} — approved by jamian.worrell (${req.id})`}, ...(ident.history||[])];
+    }
+    auditLog('Access Granted', req.who, `${req.access} provisioned via ${req.id} — approved by jamian.worrell`);
+
+    // Update provisioning plan tab to reflect the executed plan
+    const planCard = document.querySelector('#prov-plans .card');
+    if (planCard) {
+      const subtitle = planCard.querySelector('.card-subtitle');
+      const badge = planCard.querySelector('.badge-amber,.badge-green,.badge-red');
+      if (subtitle) subtitle.textContent = `Generated from ${req.id} · Executed ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+      if (badge)    { badge.textContent = 'Executed'; badge.className = 'badge badge-green'; }
+      const btns = planCard.querySelectorAll('button');
+      btns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      const note = document.createElement('div');
+      note.style.cssText = 'margin-top:10px;padding:8px 12px;background:var(--green-lt);border:1px solid #A7F3D0;border-radius:5px;font-size:12px;color:var(--green)';
+      note.innerHTML = `✓ Provisioning executed — ${req.access} added to ${req.who}. Verify in <span class="link" onclick="openDetailPanel('${req.who}')">Identity Warehouse →</span>`;
+      planCard.appendChild(note);
+    }
+
+    reqCount--;
+    markStep('S2','S2b');
+    toast(`Request approved — ${req.access} provisioned to ${req.who}`, 'success');
+  } else {
+    auditLog('Access Rejected', req.who, `${req.access} denied by jamian.worrell (${req.id})`);
+    markStep('S2','S2c');
+    toast('Request rejected — requester notified');
+  }
+  updateDashboard();
+  saveState();
 }
 function provTab(t, el) {
   document.querySelectorAll('#view-provisioning .tab').forEach(x=>x.classList.remove('active'));
@@ -1854,7 +1894,48 @@ function openDetailPanel(id) {
   document.getElementById('dp-login').textContent = i.login;
   document.getElementById('dp-cert').textContent = i.score>=70?'Overdue':'Q3 2025';
   document.getElementById('dp-acc-count').textContent = i.access.length;
-  document.getElementById('dp-entitlements').innerHTML = i.access.map(a=>`<span class="ent-tag">${a}</span>`).join('');
+  // Entitlements with metadata — source, assignment type, last certified
+  const privKeywords = ['Admin','Full Access','Owner','Super','CyberArk','Splunk','Global','Root'];
+  const isPriv = a => privKeywords.some(k => a.includes(k));
+  const sourceFor = a => {
+    if (/CN=|AD|Active Dir/i.test(a)) return 'Active Directory';
+    if (/Salesforce/i.test(a)) return 'Salesforce';
+    if (/AWS|EC2|S3/i.test(a)) return 'AWS IAM';
+    if (/Azure|Entra/i.test(a)) return 'Azure AD';
+    if (/GitHub/i.test(a)) return 'GitHub';
+    if (/Okta/i.test(a)) return 'Okta';
+    if (/SAP/i.test(a)) return 'SAP ERP';
+    if (/Jira|Confluence/i.test(a)) return 'Atlassian';
+    if (/Workday/i.test(a)) return 'Workday';
+    return i.source || 'Direct';
+  };
+  const certDate = () => {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const d = new Date(); d.setMonth(d.getMonth()-Math.floor(Math.random()*6));
+    return months[d.getMonth()]+' '+d.getFullYear();
+  };
+  document.getElementById('dp-entitlements').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ENTITLEMENT</th>
+        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">SOURCE</th>
+        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">TYPE</th>
+        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">CERTIFIED</th>
+        <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ACTION</th>
+      </tr></thead>
+      <tbody>${(i.access||[]).filter(a=>a!=='IAM Terminal').map(a=>`
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px">
+            <span style="font-weight:500">${a}</span>
+            ${isPriv(a)?'<span style="margin-left:5px;font-size:9px;padding:1px 5px;background:var(--red-lt);color:var(--red);border-radius:3px;font-weight:600">PRIV</span>':''}
+          </td>
+          <td style="padding:6px 8px;color:var(--muted)">${sourceFor(a)}</td>
+          <td style="padding:6px 8px"><span style="font-size:10px;padding:1px 6px;background:var(--blue-lt);color:var(--blue);border-radius:3px">${isPriv(a)?'Direct':'Role-based'}</span></td>
+          <td style="padding:6px 8px;color:var(--muted)">${certDate()}</td>
+          <td style="padding:6px 8px"><span class="link" style="color:var(--red);font-size:11px" onclick="dpRevokeEntitlement('${i.id}','${a.replace(/'/g,"\\'")}')">Revoke</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
   const vs = document.getElementById('dp-violations-section');
   if (i.violations.length) {
     vs.style.display='block';
@@ -2020,7 +2101,11 @@ function auditLog(action, entity, detail) {
   AUDIT_LOG.unshift({ id: ++_auditSeq, ts: new Date().toISOString(), actor: 'jamian.worrell', action, entity: entity||'', detail: detail||'' });
   if (AUDIT_LOG.length > 500) AUDIT_LOG.pop();
   const nb = document.getElementById('nb-audit');
-  if (nb) nb.textContent = Math.min(AUDIT_LOG.length, 99);
+  if (nb) nb.textContent = Math.min(AUDIT_LOG.length, 99) || '';
+  // Refresh activity feed if dashboard is visible
+  if (document.getElementById('view-dashboard')?.classList.contains('active')) {
+    _renderActivityFeed();
+  }
   saveState();
 }
 
@@ -2043,7 +2128,11 @@ function renderAuditLog(filter, typeFilter) {
   if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted2);padding:24px">No matching audit events.</td></tr>'; return; }
   tbody.innerHTML = rows.map(r => {
     const d = new Date(r.ts);
-    const ts = d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const ts = isToday
+      ? d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+      : d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
     return `<tr class="${auditClass(r.action)}">
       <td class="audit-ts">${ts}</td>
       <td style="font-size:11.5px;color:var(--blue);font-weight:600">${r.actor}</td>
@@ -2090,15 +2179,114 @@ function exportCSV() {
 
 // ── DYNAMIC DASHBOARD ──────────────────────────────────────
 function updateDashboard() {
-  const totalV  = IDENTITIES.reduce((s,i) => s + (i.violations||[]).length, 0);
-  const pending = REQUESTS.filter(r => r.status === 'Pending').length;
+  const totalV    = IDENTITIES.reduce((s,i) => s + (i.violations||[]).length, 0);
+  const pending   = REQUESTS.filter(r => r.status === 'Pending').length;
+  const totalIds  = IDENTITIES.length;
+  const highRisk  = IDENTITIES.filter(i => i.score >= 70).length;
+  const orphans   = IDENTITIES.filter(i => i.mgr === 'Unknown').length;
+  const certOpen  = typeof CERT_ITEMS !== 'undefined' ? CERT_ITEMS.filter(c => !c.done).length : 0;
+
+  // Dashboard metric cards — update by label
   document.querySelectorAll('.metric-value').forEach(el => {
-    if (el.closest('.metric-card')?.querySelector('.metric-label')?.textContent.trim() === 'Open Violations') el.textContent = totalV;
-    if (el.closest('.metric-card')?.querySelector('.metric-label')?.textContent.trim() === 'Pending Requests') el.textContent = pending;
-    if (el.closest('.metric-card')?.querySelector('.metric-label')?.textContent.trim() === 'Total Identities') el.textContent = (8412 + IDENTITIES.filter(i => i._new).length).toLocaleString();
+    const label = el.closest('.metric-card')?.querySelector('.metric-label')?.textContent.trim();
+    if (label === 'Open Violations')  el.textContent = totalV;
+    if (label === 'Pending Requests') el.textContent = pending;
+    if (label === 'Total Identities') el.textContent = totalIds.toLocaleString();
   });
-  const nbViol = document.getElementById('nb-viol'); if (nbViol) nbViol.textContent = totalV;
-  const nbReq  = document.getElementById('nb-req');  if (nbReq)  nbReq.textContent  = pending;
+
+  // Sidebar badges
+  const nbViol = document.getElementById('nb-viol'); if (nbViol) nbViol.textContent = totalV || '';
+  const nbReq  = document.getElementById('nb-req');  if (nbReq)  nbReq.textContent  = pending || '';
+
+  // Filter bar buttons — live counts
+  const counts = {
+    all:       totalIds,
+    active:    IDENTITIES.filter(i=>i.status==='Active').length,
+    inactive:  IDENTITIES.filter(i=>i.status==='Inactive').length,
+    high:      highRisk,
+    orphan:    orphans,
+    violation: IDENTITIES.filter(i=>i.violations.length>0).length,
+  };
+  Object.entries(counts).forEach(([key, count]) => {
+    const btn = document.getElementById('idf-'+key);
+    if (btn) {
+      const labels = {all:'All',active:'Active',inactive:'Inactive',high:'High Risk',orphan:'Orphan',violation:'Has Violations'};
+      btn.textContent = `${labels[key]} (${count})`;
+    }
+  });
+
+  // Risk distribution bars — update from live data
+  const total = totalIds || 1;
+  const critical = IDENTITIES.filter(i=>i.score>=90).length;
+  const high2    = IDENTITIES.filter(i=>i.score>=70&&i.score<90).length;
+  const medium   = IDENTITIES.filter(i=>i.score>=40&&i.score<70).length;
+  const low2     = IDENTITIES.filter(i=>i.score<40).length;
+  _setRiskBar('Critical (90+)', critical, total, '#DC2626');
+  _setRiskBar('High (70\u201389)', high2, total, '#EA580C');
+  _setRiskBar('Medium (40\u201369)', medium, total, '#D97706');
+  _setRiskBar('Low (0\u201339)', low2, total, '#16A34A');
+  _setRiskBar('Orphan Accounts', orphans, total, '#7C3AED', orphans);
+  _setRiskBar('Inactive \u003E 90d', IDENTITIES.filter(i=>/\d{2,3}\s*d/i.test(i.login||'')).length, total, '#6B7280');
+  _setRiskBar('SoD Violations', totalV, total, '#DC2626', totalV);
+
+  // Live activity feed
+  _renderActivityFeed();
+}
+
+function _setRiskBar(label, count, total, color, rawCount) {
+  const pct = Math.round(count/total*100);
+  document.querySelectorAll('.risk-bar-row').forEach(row => {
+    if (row.querySelector('.rb-label')?.textContent.trim() === label) {
+      const fill = row.querySelector('.rb-fill');
+      const pctEl = row.querySelector('.rb-pct');
+      if (fill) { fill.style.width = Math.max(pct,1)+'%'; fill.style.background = color; }
+      if (pctEl) pctEl.textContent = rawCount !== undefined ? rawCount : pct+'%';
+    }
+  });
+}
+
+function _renderActivityFeed() {
+  const feed = document.getElementById('dash-activity-feed');
+  const ts   = document.getElementById('dash-activity-ts');
+  if (!feed) return;
+
+  const dotColor = action => {
+    if (/grant|approv|cert|creat|join/i.test(action)) return 'var(--green)';
+    if (/revok|reject|violat|eject|deni/i.test(action)) return 'var(--red)';
+    if (/modif|updat|move|mover/i.test(action)) return 'var(--amber)';
+    if (/role|assign/i.test(action)) return 'var(--blue)';
+    return 'var(--muted2)';
+  };
+
+  const fmtTs = iso => {
+    const d = new Date(iso);
+    const now = Date.now();
+    const diff = now - d.getTime();
+    if (diff < 60000)    return 'just now';
+    if (diff < 3600000)  return Math.floor(diff/60000)+'m ago';
+    if (diff < 86400000) return Math.floor(diff/3600000)+'h ago';
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  };
+
+  // Seed baseline activity if audit log is empty
+  const seed = AUDIT_LOG.length ? [] : [
+    {ts:new Date(Date.now()-240000).toISOString(), action:'Access Granted',  entity:'sarah.chen',    detail:'Salesforce Admin'},
+    {ts:new Date(Date.now()-1080000).toISOString(),action:'Role Assigned',   entity:'mike.torres',   detail:'Finance User'},
+    {ts:new Date(Date.now()-3600000).toISOString(),action:'SoD Violation',   entity:'james.white',   detail:'Finance-IT SoD detected'},
+    {ts:new Date(Date.now()-7200000).toISOString(),action:'Cert Overdue',    entity:'Priv Audit',    detail:'Campaign at 28%'},
+    {ts:new Date(Date.now()-10800000).toISOString(),action:'Account Disabled',entity:'old.contractor',detail:'120d inactive'},
+    {ts:new Date(Date.now()-14400000).toISOString(),action:'New Hire',       entity:'new.hire_049',  detail:'Joiner event — Engineering'},
+  ];
+  const events = [...(AUDIT_LOG.length ? AUDIT_LOG : seed)].slice(0,8);
+
+  feed.innerHTML = events.map(e => `
+    <div class="tl-item">
+      <div class="tl-dot" style="background:${dotColor(e.action||e.actor)}"></div>
+      <div class="tl-date">${fmtTs(e.ts)}</div>
+      <div class="tl-content"><strong>${e.action||'Event'}</strong>${e.entity?' \u2014 '+e.entity:''}${e.detail?' \u00b7 <span style="color:var(--muted)">'+e.detail+'</span>':''}</div>
+    </div>`).join('');
+
+  if (ts) ts.textContent = 'Live · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
 
 // ── MODAL SYSTEM (real CRUD) ───────────────────────────────
@@ -2587,16 +2775,49 @@ window.openDetailPanel = function(id) {
   const lbl = document.getElementById('dp-risk-score-lbl');
   if (lbl) lbl.textContent = i.score + ' / 100';
 
-  // Access tab
+  // Access tab — entitlement metadata table
   document.getElementById('dp-acc-count').textContent = (i.access || []).length;
   const entEl = document.getElementById('dp-entitlements');
   if (entEl) {
-    entEl.innerHTML = (i.access || []).map(a =>
-      `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <span>${a}</span>
-        <button class="btn btn-sm" style="padding:2px 8px;font-size:10px;color:var(--red);border-color:#FECACA" onclick="dpRemoveEntitlement('${id}','${a.replace(/'/g,"\\'")}',this)">Revoke</button>
-      </div>`
-    ).join('') + `<div style="margin-top:10px;font-size:11px;color:var(--muted)">Click an entitlement tag to revoke it. Use + Add to provision new access.</div>`;
+    const privKeywords = ['Admin','Full Access','Owner','Super','CyberArk','Splunk','Global','Root'];
+    const isPriv = a => privKeywords.some(k => a.includes(k));
+    const sourceFor = a => {
+      if (/CN=|AD|Active Dir/i.test(a)) return 'Active Directory';
+      if (/Salesforce/i.test(a)) return 'Salesforce';
+      if (/AWS|EC2|S3/i.test(a)) return 'AWS IAM';
+      if (/Azure|Entra/i.test(a)) return 'Azure AD';
+      if (/GitHub/i.test(a)) return 'GitHub';
+      if (/Okta/i.test(a)) return 'Okta';
+      if (/SAP/i.test(a)) return 'SAP ERP';
+      if (/Jira|Confluence/i.test(a)) return 'Atlassian';
+      if (/Workday/i.test(a)) return 'Workday';
+      return i.source || 'Direct';
+    };
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const certDate = () => { const d = new Date(); d.setMonth(d.getMonth()-Math.floor(Math.random()*6)); return months[d.getMonth()]+' '+d.getFullYear(); };
+    const accessList = (i.access || []).filter(a => a !== 'IAM Terminal');
+    entEl.innerHTML = accessList.length ? `
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ENTITLEMENT</th>
+          <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">SOURCE</th>
+          <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">TYPE</th>
+          <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">CERTIFIED</th>
+          <th style="text-align:left;padding:5px 8px;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.5px">ACTION</th>
+        </tr></thead>
+        <tbody>${accessList.map(a=>`
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px">
+              <span style="font-weight:500">${a}</span>
+              ${isPriv(a)?'<span style="margin-left:5px;font-size:9px;padding:1px 5px;background:var(--red-lt);color:var(--red);border-radius:3px;font-weight:600">PRIV</span>':''}
+            </td>
+            <td style="padding:6px 8px;color:var(--muted)">${sourceFor(a)}</td>
+            <td style="padding:6px 8px"><span style="font-size:10px;padding:1px 6px;background:var(--blue-lt);color:var(--blue);border-radius:3px">${isPriv(a)?'Direct':'Role-based'}</span></td>
+            <td style="padding:6px 8px;color:var(--muted)">${certDate()}</td>
+            <td style="padding:6px 8px"><span class="link" style="color:var(--red);font-size:11px" onclick="dpRemoveEntitlement('${id}','${a.replace(/'/g,"\\'")}',this)">Revoke</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '<div style="text-align:center;color:var(--muted2);padding:24px;font-size:12px">No entitlements assigned.</div>';
   }
 
   // Violations tab
